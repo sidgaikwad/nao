@@ -77,8 +77,10 @@ class AgentClient:
         backend_url: str = BACKEND_URL,
         email: str | None = None,
         password: str | None = None,
+        project_name: str | None = None,
     ):
         self.backend_url = backend_url
+        self.project_name = project_name
         self._email = email
         self._password = password
         self._session: requests.Session | None = None
@@ -144,6 +146,9 @@ class AgentClient:
         if test_case.database:
             payload["databaseId"] = test_case.database
 
+        if self.project_name:
+            payload["projectName"] = self.project_name
+
         cost_payload = serialize_model_costs(costs)
         if cost_payload is not None:
             payload["meta"] = {"costs": cost_payload}
@@ -176,11 +181,11 @@ class AgentClient:
 _client: AgentClient | None = None
 
 
-def get_client(email: str | None = None, password: str | None = None) -> AgentClient:
+def get_client(email: str | None = None, password: str | None = None, project_name: str | None = None) -> AgentClient:
     """Get or create the module-level agent client."""
     global _client
     if _client is None:
-        _client = AgentClient(BACKEND_URL, email=email, password=password)
+        _client = AgentClient(BACKEND_URL, email=email, password=password, project_name=project_name)
     return _client
 
 

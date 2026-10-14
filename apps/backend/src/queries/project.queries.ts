@@ -148,6 +148,11 @@ export const listUserProjects = async (userId: string): Promise<DBProject[]> => 
 	return results.map((r) => r.project);
 };
 
+export const getUserProjectByName = async (userId: string, name: string): Promise<DBProject | null> => {
+	const projects = await listUserProjects(userId);
+	return projects.find((project) => project.name === name) ?? null;
+};
+
 export const getUserRoleInProject = async (projectId: string, userId: string): Promise<UserRole | null> => {
 	const member = await getProjectMember(projectId, userId);
 	if (member) {
