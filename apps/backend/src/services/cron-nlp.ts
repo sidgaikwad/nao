@@ -4,9 +4,8 @@ import { CronExpressionParser } from 'cron-parser';
 
 import { disableModelReasoning, getProviderMeta, type ProviderModelResult } from '../agents/providers';
 import { llmTelemetry } from '../agents/telemetry';
-import * as llmConfigQueries from '../queries/project-llm-config.queries';
 import { sanitizeCron } from '../utils/cron';
-import { resolveDefaultModelSelection, resolveProviderModel } from '../utils/llm';
+import { resolveDefaultModelSelection, resolveProjectModelProvider, resolveProviderModel } from '../utils/llm';
 
 /** Reasoning models spend most of the budget thinking before writing the expression. */
 const MAX_OUTPUT_TOKENS = 1024;
@@ -53,7 +52,7 @@ async function resolveModelForProject(
 	projectId: string,
 ): Promise<{ provider: LlmProvider; model: ProviderModelResult } | null> {
 	const pinned = await resolveDefaultModelSelection(projectId, 'other');
-	const provider = pinned?.provider ?? (await llmConfigQueries.getProjectModelProvider(projectId));
+	const provider = pinned?.provider ?? (await resolveProjectModelProvider(projectId));
 	if (!provider) {
 		return null;
 	}
