@@ -5,7 +5,13 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from nao_core.config.base import LLM_OVERRIDE_NOTICE, NaoConfig, annotate_llm_override, annotate_optional_templates
+from nao_core.config.base import (
+    LLM_OVERRIDE_NOTICE,
+    NaoConfig,
+    NaoConfigError,
+    annotate_llm_override,
+    annotate_optional_templates,
+)
 from nao_core.config.databases.base import DatabaseTemplate, ProfilingRefreshPolicy
 from nao_core.config.databases.duckdb import DuckDBConfig
 from nao_core.config.llm import LLMConfig, LLMProvider, ProviderConfig
@@ -93,6 +99,15 @@ def test_save_preserves_metabase_api_key(tmp_path):
 def test_threads_must_be_positive():
     with pytest.raises(ValidationError):
         NaoConfig.model_validate({"project_name": "test-project", "threads": 0})
+
+
+@pytest.mark.parametrize("content", ["", "- project_name: test-project\n", "just a string\n"])
+def test_try_load_reports_non_mapping_config_as_config_error(tmp_path, monkeypatch, content):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "nao_config.yaml").write_text(content)
+
+    with pytest.raises(NaoConfigError, match="Failed to load nao_config.yaml"):
+        NaoConfig.try_load(tmp_path, raise_on_error=True)
 
 
 @patch("nao_core.config.base.ask_confirm")

@@ -82,9 +82,9 @@ class NaoConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def parse_databases(cls, data: dict) -> dict:
+    def parse_databases(cls, data: Any) -> Any:
         """Parse database configs into their specific types."""
-        if "databases" in data and isinstance(data["databases"], list):
+        if isinstance(data, dict) and isinstance(data.get("databases"), list):
             data["databases"] = [parse_database_config(db) if isinstance(db, dict) else db for db in data["databases"]]
         return data
 
