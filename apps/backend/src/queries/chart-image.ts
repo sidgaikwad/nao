@@ -10,15 +10,14 @@ import { getLatestExecuteSqlByQueryId } from './execute-sql.queries';
 
 const DISPLAY_CHART_TOOL_TYPE = 'tool-display_chart';
 
-export const getChartById = async (id: string): Promise<string> => {
-	const result = await takeFirstOrThrow(
-		db
-			.select({ data: s.message_part_chart_image.data })
-			.from(s.message_part_chart_image)
-			.where(eq(s.message_part_chart_image.id, id))
-			.execute(),
-	);
-	return result.data;
+export const getChartById = async (id: string): Promise<string | null> => {
+	const [result] = await db
+		.select({ data: s.message_part_chart_image.data })
+		.from(s.message_part_chart_image)
+		.where(eq(s.message_part_chart_image.id, id))
+		.limit(1)
+		.execute();
+	return result?.data ?? null;
 };
 
 export const getDisplayConfigByToolCallId = async (toolCallId: string): Promise<displayChart.Input> => {
