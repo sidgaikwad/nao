@@ -20,6 +20,7 @@ interface RegisterJobOptions<T> {
 const POLL_INTERVAL_MS = 30_000;
 const RECLAIM_INTERVAL_MS = 60_000;
 const LEASE_DURATION_MS = 10 * 60_000;
+const LEASE_RENEW_INTERVAL_MS = 60_000;
 const CLAIM_BATCH_SIZE = 10;
 const RETRY_BACKOFF_MS = [30_000, 60_000, 120_000, 300_000, 600_000];
 
@@ -149,6 +150,7 @@ async function executeJob(job: DBScheduledJob): Promise<void> {
 		const canRetry = job.attempts < job.maxAttempts;
 		await scheduledJobQueries.markJobFailed(
 			job.id,
+			instanceId,
 			`No handler registered for '${job.name}'`,
 			canRetry ? new Date(Date.now() + RECLAIM_INTERVAL_MS) : null,
 		);
@@ -159,6 +161,7 @@ async function executeJob(job: DBScheduledJob): Promise<void> {
 		return;
 	}
 
+	const stopRenewingLease = startLeaseRenewal(job);
 	try {
 		const payload = job.payload ?? {};
 		const projectId = await registration.resolveProjectId?.(payload);
@@ -174,6 +177,35 @@ async function executeJob(job: DBScheduledJob): Promise<void> {
 		await onJobSuccess(job);
 	} catch (err) {
 		await onJobFailure(job, err);
+	} finally {
+		stopRenewingLease();
+	}
+}
+
+/**
+ * Keeps the lease fresh while a handler runs, so `runReclaim` only picks up jobs whose worker
+ * actually died rather than ones that are merely slow.
+ */
+function startLeaseRenewal(job: DBScheduledJob): () => void {
+	const timer = setInterval(() => void renewLease(job), LEASE_RENEW_INTERVAL_MS);
+	timer.unref?.();
+	return () => clearInterval(timer);
+}
+
+async function renewLease(job: DBScheduledJob): Promise<void> {
+	try {
+		const renewed = await scheduledJobQueries.renewJobLease(job.id, instanceId, new Date());
+		if (!renewed) {
+			logger.warn(`Scheduler lost the lease on job '${job.name}' while it was still running`, {
+				source: 'system',
+				context: { jobId: job.id, name: job.name },
+			});
+		}
+	} catch (err) {
+		logger.warn(`Scheduler failed to renew the lease on job '${job.name}'`, {
+			source: 'system',
+			context: { jobId: job.id, name: job.name, error: serializeError(err) },
+		});
 	}
 }
 
@@ -182,15 +214,20 @@ async function onJobSuccess(job: DBScheduledJob): Promise<void> {
 	// while it was running, and the next run must reflect the current definition.
 	const current = (await scheduledJobQueries.getJobById(job.id)) ?? job;
 	if (!current.cron) {
-		await scheduledJobQueries.deleteJob(current.id);
+		await scheduledJobQueries.deleteClaimedJob(current.id, instanceId);
 		return;
 	}
 	const next = nextCronTick(current.cron, new Date());
 	if (!next) {
-		await scheduledJobQueries.markJobFailed(current.id, `Cron expression became invalid: ${current.cron}`, null);
+		await scheduledJobQueries.markJobFailed(
+			current.id,
+			instanceId,
+			`Cron expression became invalid: ${current.cron}`,
+			null,
+		);
 		return;
 	}
-	await scheduledJobQueries.rescheduleJob(current.id, next);
+	await scheduledJobQueries.rescheduleJob(current.id, instanceId, next);
 }
 
 async function onJobFailure(job: DBScheduledJob, err: unknown): Promise<void> {
@@ -205,17 +242,17 @@ async function onJobFailure(job: DBScheduledJob, err: unknown): Promise<void> {
 		if (cron) {
 			const next = nextCronTick(cron, new Date());
 			if (next) {
-				await scheduledJobQueries.rescheduleJob(job.id, next);
+				await scheduledJobQueries.rescheduleJob(job.id, instanceId, next);
 				return;
 			}
 		}
-		await scheduledJobQueries.markJobFailed(job.id, message, null);
+		await scheduledJobQueries.markJobFailed(job.id, instanceId, message, null);
 		return;
 	}
 
 	const backoff = RETRY_BACKOFF_MS[Math.min(job.attempts - 1, RETRY_BACKOFF_MS.length - 1)];
 	const nextRunAt = new Date(Date.now() + backoff);
-	await scheduledJobQueries.markJobFailed(job.id, message, nextRunAt);
+	await scheduledJobQueries.markJobFailed(job.id, instanceId, message, nextRunAt);
 }
 
 export function nextCronTick(cron: string, after: Date): Date | null {

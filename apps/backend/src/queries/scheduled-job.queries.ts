@@ -1,4 +1,4 @@
-import { and, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, lte, type SQL, sql } from 'drizzle-orm';
 
 import s, { type DBScheduledJob, type NewScheduledJob } from '../db/abstractSchema';
 import { db } from '../db/db';
@@ -163,6 +163,20 @@ export const reclaimStaleJobs = async (now: Date, leaseDurationMs: number): Prom
 	return result.length;
 };
 
+/**
+ * Extend a running job's lease so a long handler is not reclaimed mid-run. Returns `false` once
+ * the lease has been lost to a reclaim.
+ */
+export const renewJobLease = async (id: string, lockedBy: string, now: Date): Promise<boolean> => {
+	const renewed = await db
+		.update(s.scheduledJob)
+		.set({ lockedAt: now })
+		.where(and(isClaimedBy(id, lockedBy), eq(s.scheduledJob.status, 'running')))
+		.returning({ id: s.scheduledJob.id })
+		.execute();
+	return renewed.length > 0;
+};
+
 export const getJobById = async (id: string): Promise<DBScheduledJob | null> => {
 	const [row] = await db.select().from(s.scheduledJob).where(eq(s.scheduledJob.id, id)).limit(1).execute();
 	return row ?? null;
@@ -176,7 +190,12 @@ export const deleteJobByUniqueKey = async (uniqueKey: string): Promise<void> => 
 	await db.delete(s.scheduledJob).where(eq(s.scheduledJob.uniqueKey, uniqueKey)).execute();
 };
 
-export const rescheduleJob = async (id: string, runAt: Date): Promise<void> => {
+/** Removes a finished one-off job, unless its lease was lost and the row now belongs to another run. */
+export const deleteClaimedJob = async (id: string, lockedBy: string): Promise<void> => {
+	await db.delete(s.scheduledJob).where(isClaimedBy(id, lockedBy)).execute();
+};
+
+export const rescheduleJob = async (id: string, lockedBy: string, runAt: Date): Promise<void> => {
 	await db
 		.update(s.scheduledJob)
 		.set({
@@ -187,11 +206,16 @@ export const rescheduleJob = async (id: string, runAt: Date): Promise<void> => {
 			lockedAt: null,
 			lockedBy: null,
 		})
-		.where(eq(s.scheduledJob.id, id))
+		.where(isClaimedBy(id, lockedBy))
 		.execute();
 };
 
-export const markJobFailed = async (id: string, error: string, nextRunAt: Date | null): Promise<void> => {
+export const markJobFailed = async (
+	id: string,
+	lockedBy: string,
+	error: string,
+	nextRunAt: Date | null,
+): Promise<void> => {
 	await db
 		.update(s.scheduledJob)
 		.set({
@@ -201,10 +225,14 @@ export const markJobFailed = async (id: string, error: string, nextRunAt: Date |
 			lockedAt: null,
 			lockedBy: null,
 		})
-		.where(eq(s.scheduledJob.id, id))
+		.where(isClaimedBy(id, lockedBy))
 		.execute();
 };
 
 export const updateJobPayload = async (id: string, payload: Record<string, unknown>): Promise<void> => {
 	await db.update(s.scheduledJob).set({ payload }).where(eq(s.scheduledJob.id, id)).execute();
 };
+
+function isClaimedBy(id: string, lockedBy: string): SQL | undefined {
+	return and(eq(s.scheduledJob.id, id), eq(s.scheduledJob.lockedBy, lockedBy));
+}
