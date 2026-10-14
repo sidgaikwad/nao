@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -66,6 +66,7 @@ from nao_core.semantic_layer import (  # noqa: E402
 )
 
 port = int(os.environ.get("PORT", 8005))
+startup_working_directory = Path.cwd()
 
 # Global scheduler instance
 scheduler = None
@@ -125,6 +126,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def restore_working_directory(request: Request, call_next):
+    """Loading a project config chdirs into its folder, which may be deleted after the request."""
+    try:
+        return await call_next(request)
+    finally:
+        os.chdir(startup_working_directory)
 
 
 class CompileSemanticQueryRequest(BaseModel):
