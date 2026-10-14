@@ -1,5 +1,5 @@
 import { executeSemanticQuery, executeSql } from '@nao/shared/tools';
-import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import s from '../db/abstractSchema';
 import { db } from '../db/db';
@@ -65,6 +65,18 @@ export type LatestExecuteSqlRow = {
 
 /** Latest non-superseded query part for a query id (global), read as SQL. */
 export async function getLatestExecuteSqlByQueryId(queryId: string): Promise<LatestExecuteSqlRow | null> {
+	return findLatestExecuteSql(messagePartToolOutputIdEquals(queryId));
+}
+
+/** Latest non-superseded query part for a query id within a chat, with its chat owner, read as SQL. */
+export async function getLatestExecuteSqlByQueryIdInChat(
+	chatId: string,
+	queryId: string,
+): Promise<LatestExecuteSqlRow | null> {
+	return findLatestExecuteSql(and(eq(s.chat.id, chatId), messagePartToolOutputIdEquals(queryId)));
+}
+
+async function findLatestExecuteSql(condition: SQL | undefined): Promise<LatestExecuteSqlRow | null> {
 	const [row] = await db
 		.select({
 			projectId: s.chat.projectId,
@@ -79,7 +91,7 @@ export async function getLatestExecuteSqlByQueryId(queryId: string): Promise<Lat
 		.from(s.messagePart)
 		.innerJoin(s.chatMessage, eq(s.messagePart.messageId, s.chatMessage.id))
 		.innerJoin(s.chat, eq(s.chatMessage.chatId, s.chat.id))
-		.where(and(isQueryToolPart(), isNull(s.chatMessage.supersededAt), messagePartToolOutputIdEquals(queryId)))
+		.where(and(isQueryToolPart(), isNull(s.chatMessage.supersededAt), condition))
 		.orderBy(desc(s.chatMessage.createdAt), desc(s.messagePart.createdAt), desc(s.messagePart.order))
 		.limit(1)
 		.execute();

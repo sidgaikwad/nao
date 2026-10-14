@@ -43,6 +43,7 @@ export const SidePanelContent = ({
 	const agentRef = useRef(agent);
 	agentRef.current = agent;
 	const queryId = output.id;
+	const chatId = agent?.chatId;
 	const [sqlQuery, setSqlQuery] = useState(input.sql_query);
 	const [savedSql, setSavedSql] = useState(input.sql_query);
 	const [previewOutput, setPreviewOutput] = useState<executeSql.Output>(output);
@@ -82,7 +83,7 @@ export const SidePanelContent = ({
 		setError(null);
 	}, [queryId]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only when switching queries
 
-	const canEdit = Boolean(editable && queryId && agent && !agent.isReadonly);
+	const canEdit = Boolean(editable && queryId && chatId && agent && !agent.isReadonly);
 	const isDirty = sqlQuery !== savedSql;
 	const validationIssues = useMemo(() => (canEdit ? validateSqlFilterTemplate(sqlQuery) : []), [canEdit, sqlQuery]);
 
@@ -94,12 +95,13 @@ export const SidePanelContent = ({
 
 	const buildMutationInput = useCallback(
 		(sql: string) => ({
+			chatId: chatId!,
 			queryId: queryId!,
 			sql_query: sql,
 			database_id: input.database_id ?? undefined,
 			name: input.name ?? undefined,
 		}),
-		[queryId, input.database_id, input.name],
+		[chatId, queryId, input.database_id, input.name],
 	);
 
 	const beginMutation = useCallback(() => {

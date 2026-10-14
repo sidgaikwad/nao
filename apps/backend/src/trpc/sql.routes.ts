@@ -1,10 +1,11 @@
 import { z } from 'zod/v4';
 
-import { getLatestExecuteSqlByQueryId, type LatestExecuteSqlRow } from '../queries/execute-sql.queries';
+import { getLatestExecuteSqlByQueryIdInChat, type LatestExecuteSqlRow } from '../queries/execute-sql.queries';
 import { previewSqlQueryInChat, updateSqlQueryInChat } from '../services/update-sql';
 import { cloudBillingMiddleware, protectedProcedure } from './trpc';
 
 const sqlEditInput = z.object({
+	chatId: z.string(),
 	queryId: z.string().regex(/^query_.+$/),
 	sql_query: z.string().min(1),
 	database_id: z.string().nullish(),
@@ -12,7 +13,7 @@ const sqlEditInput = z.object({
 });
 
 const resolvedSqlEditProcedure = protectedProcedure.input(sqlEditInput).use(async ({ input, next }) => {
-	const existingSqlQuery = await getLatestExecuteSqlByQueryId(input.queryId);
+	const existingSqlQuery = await getLatestExecuteSqlByQueryIdInChat(input.chatId, input.queryId);
 	return next({ ctx: { existingSqlQuery } });
 });
 
