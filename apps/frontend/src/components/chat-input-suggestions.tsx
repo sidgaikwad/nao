@@ -627,14 +627,16 @@ function SuggestionCard({
 	return (
 		<div
 			data-selection-ignore
-			className='group flex items-center gap-1 rounded-2xl border border-muted-foreground/25 bg-background p-2'
+			className='group flex flex-wrap items-center gap-1 rounded-2xl border border-muted-foreground/25 bg-background p-2'
 		>
 			{icon && <div className='flex size-9 shrink-0 items-center justify-center'>{icon}</div>}
-			<div className='min-w-0 flex-1'>
+			<div className='min-w-0 grow basis-40'>
 				<p className='truncate text-sm font-medium text-foreground'>{message}</p>
 				{description && <p className='text-xs text-muted-foreground'>{description}</p>}
 			</div>
-			{children && <div className='flex shrink-0 items-center gap-1'>{children}</div>}
+			{children && (
+				<div className='ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1'>{children}</div>
+			)}
 		</div>
 	);
 }
