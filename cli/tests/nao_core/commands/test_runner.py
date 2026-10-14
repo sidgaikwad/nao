@@ -208,6 +208,30 @@ def test_client_omits_database_id_when_the_test_case_has_none(monkeypatch):
     assert "databaseId" not in payload
 
 
+def test_client_sends_the_project_name(monkeypatch):
+    test_case = NaoTestCase(name="orders", prompt="p1", file_path=Path("tests/orders.yml"))
+    client = AgentClient(backend_url="http://backend", project_name="beta")
+    session = Mock()
+    session.post.return_value = _successful_run_response()
+    monkeypatch.setattr(client, "_get_session", lambda: (session, 0))
+
+    client.run_test(test_case)
+
+    payload = session.post.call_args.kwargs["json"]
+    assert payload["projectName"] == "beta"
+
+
+def test_run_test_creates_the_client_for_the_project(monkeypatch):
+    test_case = NaoTestCase(name="orders", prompt="p1", file_path=Path("tests/orders.yml"))
+    get_client = Mock()
+    get_client.return_value.run_test.side_effect = AgentClientError("stop")
+    monkeypatch.setattr(test_runner_module, "get_client", get_client)
+
+    run_test(test_case, ModelConfig(provider="openai", model_id="gpt-4.1"), project_name="beta")
+
+    assert get_client.call_args.kwargs["project_name"] == "beta"
+
+
 def test_client_omits_sql_when_the_test_case_is_assertion_only(monkeypatch):
     test_case = NaoTestCase(
         name="ambiguous",

@@ -201,12 +201,13 @@ def run_test(
     password: str | None = None,
     costs: ModelCosts | None = None,
     comparison: ComparisonConfig | None = None,
+    project_name: str | None = None,
 ) -> TestRunResult:
     """Run a single test case with a specific model. Returns TestRunResult."""
     UI.print(f"[bold]Running:[/bold] {test_case.name} [dim]({model})[/dim]")
     UI.print(f"[dim]  Prompt: {test_case.prompt}[/dim]")
 
-    client = get_client(email=email, password=password)
+    client = get_client(email=email, password=password, project_name=project_name)
 
     try:
         result = client.run_test(test_case, provider=model.provider, model_id=model.model_id, costs=costs)
@@ -677,6 +678,7 @@ def test(
                 password=pwd,
                 costs=resolve_model_costs(config, model),
                 comparison=test_config.comparison,
+                project_name=config.project_name,
             )
             result.attempt = attempt
             results.append(result)
@@ -694,6 +696,7 @@ def test(
                     password=pwd,
                     costs=resolve_model_costs(config, m),
                     comparison=test_config.comparison,
+                    project_name=config.project_name,
                 ): (index, attempt)
                 for index, (tc, m, attempt) in enumerate(test_runs)
             }

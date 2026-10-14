@@ -4,9 +4,10 @@ import { z } from 'zod/v4';
 
 import { executeQuery } from '../agents/tools/execute-sql';
 import type { App } from '../app';
-import { noProjectMessage } from '../env';
+import type { DBProject } from '../db/abstractSchema';
+import { isCloud, noProjectMessage } from '../env';
 import { authMiddleware } from '../middleware/auth';
-import { getEnvVars, retrieveProjectById } from '../queries/project.queries';
+import { getEnvVars, getUserProjectByName, retrieveProjectById } from '../queries/project.queries';
 import { hasFeature, LICENSE_FEATURES } from '../services/license.service';
 import { getAzureAccessTokenForUser } from '../services/microsoft-auth.service';
 import { TestAgentService, testAgentService } from '../services/test-agent.service';
@@ -45,6 +46,7 @@ export const testRoutes = async (app: App) => {
 					model: llmSelectedModelSchema,
 					sql: z.string().optional(),
 					databaseId: z.string().optional(),
+					projectName: z.string().optional(),
 					meta: z
 						.object({
 							costs: customModelCostSchema,
@@ -54,14 +56,16 @@ export const testRoutes = async (app: App) => {
 			},
 		},
 		async (request, reply) => {
-			const projectId = request.project?.id;
 			const userId = request.user.id;
-			const { prompt, model, sql, databaseId, meta } = request.body;
+			const { prompt, model, sql, databaseId, projectName, meta } = request.body;
+			const projectId = await resolveTestProjectId(userId, request.project, projectName);
 
 			const costs = meta?.costs;
 
 			if (!projectId) {
-				return reply.status(400).send({ error: noProjectMessage() });
+				const error =
+					isCloud && projectName ? `No project named '${projectName}' is accessible` : noProjectMessage();
+				return reply.status(400).send({ error });
 			}
 
 			try {
@@ -100,6 +104,19 @@ export const testRoutes = async (app: App) => {
 		},
 	);
 };
+
+/** In cloud mode a user can access several projects, so the CLI names the one it runs from. */
+async function resolveTestProjectId(
+	userId: string,
+	selectedProject: DBProject | null,
+	projectName: string | undefined,
+): Promise<string | undefined> {
+	if (!isCloud || !projectName || selectedProject?.name === projectName) {
+		return selectedProject?.id;
+	}
+	const project = await getUserProjectByName(userId, projectName);
+	return project?.id;
+}
 
 async function buildVerificationToolContext(projectId: string, userId: string): Promise<ToolContext> {
 	const project = await retrieveProjectById(projectId);

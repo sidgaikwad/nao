@@ -5,7 +5,9 @@ const mocks = vi.hoisted(() => ({
 	extractToolCalls: vi.fn(() => []),
 	getAzureAccessTokenForUser: vi.fn(),
 	getEnvVars: vi.fn(),
+	getUserProjectByName: vi.fn(),
 	hasFeature: vi.fn(),
+	isCloud: false,
 	resolveProjectContextAccess: vi.fn(),
 	retrieveProjectById: vi.fn(),
 	runTest: vi.fn(),
@@ -15,11 +17,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../src/agents/tools/execute-sql', () => ({
 	executeQuery: mocks.executeQuery,
 }));
+vi.mock('../src/env', async (importOriginal) => ({
+	...(await importOriginal<typeof import('../src/env')>()),
+	get isCloud() {
+		return mocks.isCloud;
+	},
+}));
 vi.mock('../src/middleware/auth', () => ({
 	authMiddleware: vi.fn(),
 }));
 vi.mock('../src/queries/project.queries', () => ({
 	getEnvVars: mocks.getEnvVars,
+	getUserProjectByName: mocks.getUserProjectByName,
 	retrieveProjectById: mocks.retrieveProjectById,
 }));
 vi.mock('../src/services/license.service', () => ({
@@ -47,6 +56,7 @@ import { testRoutes } from '../src/routes/test';
 describe('test routes', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.isCloud = false;
 		mocks.retrieveProjectById.mockResolvedValue({ path: '/project' });
 		mocks.resolveProjectContextAccess.mockResolvedValue({
 			warehouseTableAccess: { enforced: true },
@@ -124,6 +134,34 @@ describe('test routes', () => {
 		expect(mocks.runVerification).not.toHaveBeenCalled();
 		expect(reply.status).not.toHaveBeenCalled();
 		expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ text: 'answer', verification: undefined }));
+	});
+
+	it('runs against the project named by the CLI in cloud mode', async () => {
+		mocks.isCloud = true;
+		mocks.getUserProjectByName.mockResolvedValue({ id: 'beta-id', name: 'beta' });
+
+		await runExpectedQuery({ prompt: 'Question', projectName: 'beta' });
+
+		expect(mocks.getUserProjectByName).toHaveBeenCalledWith('user-id', 'beta');
+		expect(mocks.runTest).toHaveBeenCalledWith('beta-id', 'user-id', 'Question', undefined, undefined);
+	});
+
+	it('rejects a project name the user cannot access in cloud mode', async () => {
+		mocks.isCloud = true;
+		mocks.getUserProjectByName.mockResolvedValue(null);
+
+		const reply = await runExpectedQuery({ prompt: 'Question', projectName: 'gamma' });
+
+		expect(reply.status).toHaveBeenCalledWith(400);
+		expect(reply.send).toHaveBeenCalledWith({ error: "No project named 'gamma' is accessible" });
+		expect(mocks.runTest).not.toHaveBeenCalled();
+	});
+
+	it('keeps the selected project outside cloud mode', async () => {
+		await runExpectedQuery({ prompt: 'Question', projectName: 'beta' });
+
+		expect(mocks.getUserProjectByName).not.toHaveBeenCalled();
+		expect(mocks.runTest).toHaveBeenCalledWith('project-id', 'user-id', 'Question', undefined, undefined);
 	});
 });
 
