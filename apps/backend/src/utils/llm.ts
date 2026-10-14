@@ -1,9 +1,10 @@
 import { type BackgroundModelCategory, type DefaultModelSettings, selectBackgroundModel } from '@nao/shared';
-import { type LlmProvider, type LlmSelectedModel, providerKind } from '@nao/shared/types';
+import { type LlmProvider, type LlmSelectedModel, providerKind, providerLabel } from '@nao/shared/types';
 
 import {
 	createProviderModel,
 	getDefaultModelId,
+	getProviderApiKeyRequirement,
 	getProviderMeta,
 	LLM_PROVIDERS,
 	type ProviderModelResult,
@@ -12,6 +13,7 @@ import { env } from '../env';
 import * as projectQueries from '../queries/project.queries';
 import * as projectLlmConfigQueries from '../queries/project-llm-config.queries';
 import type { CustomModelMetadata, ProviderSettings } from '../types/llm';
+import { HandlerError } from './error';
 import { type ConfigLlm, type ConfigLlmProvider, findConfigLlmProvider, readProjectConfigLlm } from './nao-config-llm';
 
 export { getDefaultModelId };
@@ -197,6 +199,7 @@ export async function getProjectConfigLlm(projectId: string): Promise<ConfigLlm 
 /** Credentials from nao_config.yaml, topped up from the environment for whatever it leaves out. */
 function toProviderSettings(configured: ConfigLlmProvider): ProviderSettings {
 	const apiKey = configured.apiKey ?? getEnvApiKey(configured.provider) ?? '';
+	assertApiKeySet(configured.provider, apiKey);
 	const baseURL = configured.baseUrl ?? getEnvBaseUrl(configured.provider);
 
 	return {
@@ -204,6 +207,16 @@ function toProviderSettings(configured: ConfigLlmProvider): ProviderSettings {
 		...(baseURL && { baseURL }),
 		...(configured.credentials && { credentials: configured.credentials }),
 	};
+}
+
+/** Fails before the provider does when nao_config.yaml reads a required API key from an undefined variable. */
+function assertApiKeySet(provider: LlmProvider, apiKey: string): void {
+	if (!apiKey && getProviderApiKeyRequirement(provider)) {
+		throw new HandlerError(
+			'BAD_REQUEST',
+			`The API key for ${providerLabel(provider)} is not set. Define the environment variable nao_config.yaml reads it from, or set the key in the project settings.`,
+		);
+	}
 }
 
 /**
