@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { DuckDBConnection, DuckDBResultReader } from '@duckdb/node-api';
+import type { DuckDBConnection, DuckDBInstance, DuckDBResultReader } from '@duckdb/node-api';
 import type { executeSql } from '@nao/shared/tools';
 
 import { env } from '../env';
@@ -59,11 +59,8 @@ export async function runLocalQuery({
 	}
 
 	const duckdb = await loadDuckDB();
-	const workspace = await mkdtemp(join(tmpdir(), 'nao-local-query-'));
-	const instance = await duckdb.DuckDBInstance.create(':memory:', extensionConfig());
-	const connection = await instance.connect();
 
-	try {
+	return withDuckDBWorkspace(duckdb, 'nao-local-query-', extensionConfig(), async (connection, workspace) => {
 		const spreadsheetSupport = await loadSpreadsheetSupport(connection);
 
 		for (const [queryId, queryResult] of queryResults) {
@@ -79,11 +76,7 @@ export async function runLocalQuery({
 		} catch (error) {
 			throw explainLocalQueryFailure(error, spreadsheetSupport);
 		}
-	} finally {
-		connection.closeSync();
-		instance.closeSync();
-		await rm(workspace, { recursive: true, force: true });
-	}
+	});
 }
 
 /**
@@ -188,11 +181,8 @@ export async function runSqlOverQueryResults(
 	sql: string,
 ): Promise<QueryResult> {
 	const duckdb = await loadDuckDB();
-	const workspace = await mkdtemp(join(tmpdir(), 'nao-query-results-'));
-	const instance = await duckdb.DuckDBInstance.create(':memory:');
-	const connection = await instance.connect();
 
-	try {
+	return withDuckDBWorkspace(duckdb, 'nao-query-results-', {}, async (connection, workspace) => {
 		await assertSafeQueryResultsSql(connection, sql, [...queryResults.keys()]);
 
 		for (const [queryId, queryResult] of queryResults) {
@@ -202,10 +192,34 @@ export async function runSqlOverQueryResults(
 		await lockDownExternalAccess(connection);
 
 		return toQueryResult(await connection.runAndReadAll(sql), duckdb);
+	});
+}
+
+/**
+ * Opens an in-memory DuckDB with a scratch directory for staging rows, and tears down whatever
+ * was set up even when setup itself fails part way.
+ */
+async function withDuckDBWorkspace<T>(
+	duckdb: DuckDBModule,
+	workspacePrefix: string,
+	config: Record<string, string>,
+	run: (connection: DuckDBConnection, workspace: string) => Promise<T>,
+): Promise<T> {
+	let workspace: string | undefined;
+	let instance: DuckDBInstance | undefined;
+	let connection: DuckDBConnection | undefined;
+
+	try {
+		workspace = await mkdtemp(join(tmpdir(), workspacePrefix));
+		instance = await duckdb.DuckDBInstance.create(':memory:', config);
+		connection = await instance.connect();
+		return await run(connection, workspace);
 	} finally {
-		connection.closeSync();
-		instance.closeSync();
-		await rm(workspace, { recursive: true, force: true });
+		connection?.closeSync();
+		instance?.closeSync();
+		if (workspace) {
+			await rm(workspace, { recursive: true, force: true });
+		}
 	}
 }
 
