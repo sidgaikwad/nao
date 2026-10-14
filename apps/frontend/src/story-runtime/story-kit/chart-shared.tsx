@@ -1,4 +1,4 @@
-import { buildChart, labelize } from '@nao/shared/chart-builder';
+import { buildChart, labelize, timestampToIsoDate, usesTimeXAxis } from '@nao/shared/chart-builder';
 import {
 	buildSeriesChartConfig,
 	buildSeriesLegendPayload,
@@ -18,6 +18,7 @@ import { useStoryTheme } from './hooks';
 import { piePresentation, pieTooltipLabel } from './pie';
 import { useBlockData } from './use-block-data';
 import type { BlockDataSource, Row } from './use-block-data';
+import type { ChartXAxisType } from '@nao/shared/chart-builder';
 import type { ChartOptions } from './block-config';
 import type { BlockProps } from './block';
 import type { displayChart } from '@nao/shared/tools';
@@ -116,6 +117,8 @@ function ChartBody({ rows, chartType, xAxisKey, series, height, showLegend, show
 	const { visibleSeries, hiddenSeriesKeys, handleToggleSeriesVisibility } = useSeriesVisibility(series);
 	const isDualAxis = isComboChart(chartType) && visibleSeries.some((item) => item.y_axis === 'right');
 	const pie = isPieChart(chartType) && series[0] ? piePresentation(rows, xAxisKey, series[0]) : null;
+	const xAxisType = resolveXAxisType(chartType, options.xAxisType);
+	const isTimeXAxis = usesTimeXAxis({ data: rows, chartType, xAxisKey, xAxisType });
 
 	if (isPieChart(chartType) && !pie) {
 		return <div className='nao-block__state'>No numeric column to chart.</div>;
@@ -125,7 +128,7 @@ function ChartBody({ rows, chartType, xAxisKey, series, height, showLegend, show
 		data: pie?.rows ?? rows,
 		chartType,
 		xAxisKey,
-		xAxisType: resolveXAxisType(chartType, options.xAxisType),
+		xAxisType,
 		xAxisLabel: options.xAxisLabel,
 		yAxisMin: options.yAxisMin,
 		yAxisMax: options.yAxisMax,
@@ -154,7 +157,9 @@ function ChartBody({ rows, chartType, xAxisKey, series, height, showLegend, show
 						isDualAxis={isDualAxis}
 						hideTotal={options.hideTotal}
 						nameKey={pie ? series[0]?.data_key : undefined}
-						labelFormatter={(value, items) => (pie ? pieTooltipLabel(items) : labelize(value))}
+						labelFormatter={(value, items) =>
+							pie ? pieTooltipLabel(items) : labelize(isTimeXAxis ? timestampToIsoDate(value) : value)
+						}
 					/>
 				}
 			/>,
@@ -182,8 +187,8 @@ function ChartBody({ rows, chartType, xAxisKey, series, height, showLegend, show
 	);
 }
 
-function resolveXAxisType(chartType: ChartType, xAxisType: ChartOptions['xAxisType']): 'number' | 'category' {
-	if (xAxisType === 'number' || xAxisType === 'category') {
+function resolveXAxisType(chartType: ChartType, xAxisType: ChartOptions['xAxisType']): ChartXAxisType {
+	if (xAxisType) {
 		return xAxisType;
 	}
 	return chartType === 'scatter' ? 'number' : 'category';
@@ -192,7 +197,7 @@ function resolveXAxisType(chartType: ChartType, xAxisType: ChartOptions['xAxisTy
 function toChartRows(
 	rows: Row[],
 	{ xAxisKey, series }: { xAxisKey: string; series: { key: string }[] },
-	xAxisType: 'number' | 'category',
+	xAxisType: ChartXAxisType,
 ): Row[] {
 	const chartRows = rows.map((row) => {
 		const next: Row = { ...row };
