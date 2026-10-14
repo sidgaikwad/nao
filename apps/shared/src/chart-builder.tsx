@@ -91,6 +91,7 @@ const X_AXIS_LABEL_HEIGHT = 22;
 const MAX_PIE_SLICES = DEFAULT_COLORS.length - 1;
 
 const DONUT_INNER_RADIUS = '45%';
+const LINE_STROKE_WIDTH = 2;
 
 const STACK_SEPARATOR_WIDTH = 1;
 /**
@@ -1127,7 +1128,8 @@ function buildAreaChart(props: ResolvedProps) {
 	const gradientIdFor = (index: number) => `${gradientIdPrefix}grad-${index}`;
 	const isStacked = isStackedChartType(chartType);
 	const isPercent = isPercentStackedChartType(chartType);
-	const zeroBaseline = chartType !== 'line';
+	const isLine = chartType === 'line';
+	const zeroBaseline = !isLine;
 	const { renderedSeries, stackTotalLayer } = getDataLabelSetup(props, isStacked);
 	const dataKeys = renderedSeries.map((s) => s.data_key);
 	const axisValues = isStacked ? collectStackedAxisValues(data, dataKeys) : collectAxisValues(data, dataKeys);
@@ -1138,18 +1140,20 @@ function buildAreaChart(props: ResolvedProps) {
 
 	return (
 		<AreaChart data={data} accessibilityLayer margin={margin} stackOffset={isPercent ? 'expand' : undefined}>
-			<defs>
-				{renderedSeries.map((s, i) => {
-					const color = colorFor(s.data_key, i);
-					const gradientId = gradientIdFor(i);
-					return (
-						<linearGradient key={s.data_key} id={gradientId} x1='0' y1='0' x2='0' y2='1'>
-							<stop offset='0%' stopColor={color} stopOpacity={0.25} />
-							<stop offset='100%' stopColor={color} stopOpacity={0} />
-						</linearGradient>
-					);
-				})}
-			</defs>
+			{!isLine && (
+				<defs>
+					{renderedSeries.map((s, i) => {
+						const color = colorFor(s.data_key, i);
+						const gradientId = gradientIdFor(i);
+						return (
+							<linearGradient key={s.data_key} id={gradientId} x1='0' y1='0' x2='0' y2='1'>
+								<stop offset='0%' stopColor={color} stopOpacity={0.25} />
+								<stop offset='100%' stopColor={color} stopOpacity={0} />
+							</linearGradient>
+						);
+					})}
+				</defs>
+			)}
 			{showGrid && <CartesianGrid horizontal vertical={false} strokeDasharray='3 3' />}
 			{isPercent ? (
 				renderValueYAxis(true, formatYAxisTick, yAxisLabel)
@@ -1185,7 +1189,8 @@ function buildAreaChart(props: ResolvedProps) {
 					dataKey={s.data_key}
 					type='monotone'
 					stroke={colorFor(s.data_key, i)}
-					fill={`url(#${gradientIdFor(i)})`}
+					strokeWidth={isLine ? LINE_STROKE_WIDTH : undefined}
+					fill={isLine ? 'none' : `url(#${gradientIdFor(i)})`}
 					stackId={isStacked ? 'stack' : undefined}
 					isAnimationActive={Boolean(props.animate)}
 					animationDuration={CHART_ANIMATION_DURATION_MS}
@@ -1360,7 +1365,7 @@ function renderComboSeries(
 				dataKey={series.data_key}
 				type='monotone'
 				stroke={color}
-				strokeWidth={2}
+				strokeWidth={LINE_STROKE_WIDTH}
 				dot={false}
 				isAnimationActive={false}
 			/>
