@@ -926,6 +926,22 @@ def test_execute_sql_simple_duckdb(duckdb_project_folder):
     )
 
 
+def test_execute_sql_restores_working_directory(duckdb_project_folder):
+    client = TestClient(app, headers=INTERNAL_HEADERS)
+
+    response = client.post(
+        "/execute_sql",
+        json={
+            "sql": "SELECT 1 AS id",
+            "nao_project_folder": duckdb_project_folder,
+            "table_access": UNENFORCED_TABLE_ACCESS,
+        },
+    )
+
+    assert response.status_code == 200
+    assert Path.cwd() == main.startup_working_directory
+
+
 def test_execute_sql_blocks_star_with_excluded_columns(
     duckdb_project_with_excluded_columns,
 ):
