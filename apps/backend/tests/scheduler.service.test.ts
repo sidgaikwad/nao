@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
 	claimDueJobs: vi.fn(),
-	deleteJob: vi.fn(),
+	deleteClaimedJob: vi.fn(),
 	enqueueOnceJob: vi.fn(),
 	getJobById: vi.fn(),
 	hasProjectCloudBillingAccess: vi.fn(),
 	markJobFailed: vi.fn(),
 	reclaimStaleJobs: vi.fn(),
+	renewJobLease: vi.fn(),
 	rescheduleJob: vi.fn(),
 	upsertRecurringJob: vi.fn(),
 }));
@@ -61,6 +62,7 @@ describe('scheduler', () => {
 
 		expect(mocks.markJobFailed).toHaveBeenCalledWith(
 			'billing-job',
+			expect.any(String),
 			"No handler registered for 'stripe.webhook'",
 			nextRunAt,
 		);
@@ -106,10 +108,53 @@ describe('scheduler', () => {
 			expect(mocks.hasProjectCloudBillingAccess).toHaveBeenCalledOnce();
 			expect(mocks.hasProjectCloudBillingAccess).toHaveBeenCalledWith('project-1');
 			expect(handler).toHaveBeenCalledTimes(expectedCalls);
-			expect(mocks.rescheduleJob).toHaveBeenCalledWith('story-job', new Date('2026-09-28T11:00:00.000Z'));
+			expect(mocks.rescheduleJob).toHaveBeenCalledWith(
+				'story-job',
+				expect.any(String),
+				new Date('2026-09-28T11:00:00.000Z'),
+			);
 			expect(mocks.markJobFailed).not.toHaveBeenCalled();
 		},
 	);
+
+	it('renews the lease while a handler runs and fences completion to the claiming worker', async () => {
+		let finishHandler: () => void = () => undefined;
+		const handler = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					finishHandler = resolve;
+				}),
+		);
+		registerJob('automation.run', handler);
+		mocks.renewJobLease.mockResolvedValue(true);
+		mocks.claimDueJobs
+			.mockResolvedValueOnce([
+				{
+					id: 'automation-job',
+					name: 'automation.run',
+					payload: {},
+					runAt: new Date(),
+					cron: null,
+					status: 'running',
+					attempts: 1,
+					maxAttempts: 10,
+				},
+			])
+			.mockResolvedValue([]);
+
+		startScheduler();
+		await vi.advanceTimersByTimeAsync(15 * 60_000);
+		const workerId = mocks.claimDueJobs.mock.calls[0][2];
+
+		expect(mocks.renewJobLease).toHaveBeenCalledTimes(15);
+		expect(mocks.renewJobLease).toHaveBeenLastCalledWith('automation-job', workerId, expect.any(Date));
+
+		finishHandler();
+		await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+		expect(mocks.renewJobLease).toHaveBeenCalledTimes(15);
+		expect(mocks.deleteClaimedJob).toHaveBeenCalledWith('automation-job', workerId);
+	});
 
 	it('waits for an active poll before resetting scheduler state', async () => {
 		let finishClaim: (jobs: []) => void = () => undefined;
