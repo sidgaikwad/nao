@@ -92,7 +92,8 @@ class TestLLMConnection:
             models=[ModelConfig(id="llama3.2")],
         )
 
-        with patch("ollama.list") as mock_list:
+        with patch("ollama.Client") as mock_client:
+            mock_list = mock_client.return_value.list
             mock_list.return_value.models = [SimpleNamespace(model="llama3.2:latest")]
 
             success, message = check_llm_connection(config)
@@ -436,7 +437,8 @@ class TestLLMConnection:
     def test_ollama_connection_success(self):
         config = ProviderConfig(provider=LLMProvider.OLLAMA)
 
-        with patch("ollama.list") as mock_list:
+        with patch("ollama.Client") as mock_client:
+            mock_list = mock_client.return_value.list
             mock_list.return_value.models = [MagicMock(), MagicMock(), MagicMock()]
 
             success, message = check_llm_connection(config)
@@ -446,11 +448,35 @@ class TestLLMConnection:
             assert "3 models available" in message
             mock_list.assert_called_once_with()
 
+    def test_ollama_uses_base_url_env_var(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_BASE_URL", "http://remote-ollama:11434")
+        config = ProviderConfig(provider=LLMProvider.OLLAMA)
+
+        with patch("ollama.Client") as mock_client:
+            mock_client.return_value.list.return_value.models = []
+
+            success, _ = check_llm_connection(config)
+
+            assert success is True
+            mock_client.assert_called_once_with(host="http://remote-ollama:11434")
+
+    def test_ollama_config_base_url_overrides_env_var(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_BASE_URL", "http://remote-ollama:11434")
+        config = ProviderConfig(provider=LLMProvider.OLLAMA, base_url="http://configured-ollama:11434")
+
+        with patch("ollama.Client") as mock_client:
+            mock_client.return_value.list.return_value.models = []
+
+            check_llm_connection(config)
+
+            mock_client.assert_called_once_with(host="http://configured-ollama:11434")
+
     def test_ollama_exception_returns_failure(self):
         """API exception should return False with error message."""
         config = ProviderConfig(provider=LLMProvider.OLLAMA)
 
-        with patch("ollama.list") as mock_list:
+        with patch("ollama.Client") as mock_client:
+            mock_list = mock_client.return_value.list
             mock_list.side_effect = Exception("Connection refused")
 
             success, message = check_llm_connection(config)

@@ -154,7 +154,7 @@ def _check_available_models(llm_config: ProviderConfig) -> Tuple[bool, str]:
         require_dependency("ollama", "ollama", "for Ollama LLM provider")
         import ollama
 
-        models = ollama.list().models
+        models = ollama.Client(host=_resolve_base_url(llm_config)).list().models
     elif provider == "bedrock":
         region = llm_config.aws_region or os.environ.get("AWS_REGION", "us-east-1")
         if api_key:
@@ -202,6 +202,12 @@ def _check_available_models(llm_config: ProviderConfig) -> Tuple[bool, str]:
     available_ids = _collect_model_ids(model_list)
     missing = _missing_configured_models(llm_config, available_ids)
     return True, _connection_message(_count(model_list), missing)
+
+
+def _resolve_base_url(llm_config: ProviderConfig) -> str | None:
+    """Mirror the chat app, which falls back to the provider's base URL env var when the config sets none."""
+    env_var = PROVIDER_AUTH[llm_config.provider].base_url_env_var
+    return llm_config.base_url or (os.environ.get(env_var) if env_var else None)
 
 
 def check_llm_connection(llm_config: ProviderConfig) -> tuple[bool, str]:
