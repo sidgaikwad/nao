@@ -15,26 +15,26 @@ export function createTempProjectDir(prefix: string): string {
 	return dir;
 }
 
-export function replaceProjectDirectory(src: string, dest: string): void {
+export async function replaceProjectDirectory(src: string, dest: string): Promise<void> {
 	const parentDir = path.dirname(dest);
 	const backupDir = path.join(parentDir, `.project-import-backup-${crypto.randomUUID()}`);
 	let hasBackup = false;
 
-	fs.mkdirSync(parentDir, { recursive: true });
+	await fs.promises.mkdir(parentDir, { recursive: true });
 	if (fs.existsSync(dest)) {
-		fs.renameSync(dest, backupDir);
+		await fs.promises.rename(dest, backupDir);
 		hasBackup = true;
 	}
 
 	try {
-		fs.cpSync(src, dest, { recursive: true });
+		await fs.promises.cp(src, dest, { recursive: true });
 		if (hasBackup) {
-			fs.rmSync(backupDir, { recursive: true, force: true });
+			await fs.promises.rm(backupDir, { recursive: true, force: true });
 		}
 	} catch (err) {
-		fs.rmSync(dest, { recursive: true, force: true });
+		await fs.promises.rm(dest, { recursive: true, force: true });
 		if (hasBackup) {
-			fs.renameSync(backupDir, dest);
+			await fs.promises.rename(backupDir, dest);
 		}
 		throw err;
 	}
@@ -73,7 +73,7 @@ export async function createNewProject({
 	const projectDir = path.resolve(env.NAO_PROJECTS_DIR, projectId);
 
 	try {
-		replaceProjectDirectory(sourceDir, projectDir);
+		await replaceProjectDirectory(sourceDir, projectDir);
 	} catch (err) {
 		fs.rmSync(projectDir, { recursive: true, force: true });
 		throw new TRPCError({
@@ -117,7 +117,7 @@ export async function replaceExistingProject({
 	}
 
 	try {
-		replaceProjectDirectory(sourceDir, project.path);
+		await replaceProjectDirectory(sourceDir, project.path);
 	} catch (err) {
 		throw new TRPCError({
 			code: 'INTERNAL_SERVER_ERROR',

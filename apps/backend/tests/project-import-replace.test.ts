@@ -18,7 +18,7 @@ vi.mock('../src/handlers/context-recommendations.handler', () => ({
 }));
 
 import type { DBProject } from '../src/db/abstractSchema';
-import { replaceExistingProject } from '../src/utils/project-import.utils';
+import { replaceExistingProject, replaceProjectDirectory } from '../src/utils/project-import.utils';
 
 describe('replaceExistingProject', () => {
 	let root: string;
@@ -58,5 +58,28 @@ describe('replaceExistingProject', () => {
 		).resolves.toMatchObject({ status: 'updated' });
 		expect(mocks.getUserRoleInProject).toHaveBeenCalledWith('project-id', 'context-admin-id');
 		expect(fs.readFileSync(path.join(project.path!, 'RULES.md'), 'utf-8')).toBe('imported');
+	});
+});
+
+describe('replaceProjectDirectory', () => {
+	let root: string;
+
+	beforeEach(() => {
+		root = fs.mkdtempSync(path.join(os.tmpdir(), 'nao-import-'));
+	});
+
+	afterEach(() => {
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('restores the previous directory when the copy fails', async () => {
+		const dest = path.join(root, 'project');
+		fs.mkdirSync(dest);
+		fs.writeFileSync(path.join(dest, 'RULES.md'), 'original');
+
+		await expect(replaceProjectDirectory(path.join(root, 'missing'), dest)).rejects.toThrow();
+
+		expect(fs.readFileSync(path.join(dest, 'RULES.md'), 'utf-8')).toBe('original');
+		expect(fs.readdirSync(root)).toEqual(['project']);
 	});
 });
