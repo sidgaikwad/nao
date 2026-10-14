@@ -1,4 +1,12 @@
-import { bucketPieData, buildChart, defaultColorFor, labelize, resolveDataKey, sortByDateKey } from '@nao/shared';
+import {
+	bucketPieData,
+	buildChart,
+	defaultColorFor,
+	labelize,
+	pieSliceColor,
+	resolveDataKey,
+	sortByDateKey,
+} from '@nao/shared';
 import { isBuiltinChartType } from '@nao/shared/chart-types';
 import type { DateFormatSettings } from '@nao/shared/date';
 import { displayChart } from '@nao/shared/tools';
@@ -77,7 +85,7 @@ export function renderChartToSvg(input: RenderChartInput): string {
 	let legend: LegendEntry[] = [];
 	if (includeLegend) {
 		legend = isPie
-			? buildPieLegendEntries(chartData, xAxisKey, dateFormat)
+			? buildPieLegendEntries(chartData, xAxisKey, series[0], dateFormat)
 			: series.map((s, i) => ({
 					label: s.label || labelize(s.data_key, dateFormat),
 					color: colorFor(s.data_key, i),
@@ -121,11 +129,15 @@ export function renderChartToSvg(input: RenderChartInput): string {
 function buildPieLegendEntries(
 	bucketedRows: Record<string, unknown>[],
 	categoryKey: string,
+	valueSeries: displayChart.SeriesConfig | undefined,
 	dateFormat?: DateFormatSettings | null,
 ): LegendEntry[] {
 	return bucketedRows.map((row, i) => {
 		const category = String(row[categoryKey]);
-		return { label: labelize(category, dateFormat), color: defaultColorFor(category, i) };
+		return {
+			label: labelize(category, dateFormat),
+			color: pieSliceColor(valueSeries, category, defaultColorFor(category, i)),
+		};
 	});
 }
 

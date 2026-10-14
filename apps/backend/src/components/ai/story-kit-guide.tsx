@@ -32,7 +32,8 @@ export function storyKitGuideItems(): ReactElement[] {
 			the layout rather than inside a panel of your own. Every block takes <Bold>queryId</Bold> (or{' '}
 			<Bold>data</Bold>) and <Bold>title</Bold>; KpiCard and charts also take <Bold>format</Bold> ("number" |
 			"compact" | "percent" with fractions | "currency"), <Bold>currency</Bold>, <Bold>decimals</Bold>. Charts:{' '}
-			<Bold>xKey</Bold>, <Bold>series</Bold> (names or {'{ key, label?, type?, axis? }'}), <Bold>height</Bold>,{' '}
+			<Bold>xKey</Bold>, <Bold>series</Bold> (names or {'{ key, label?, color?, type?, axis?, categoryColors? }'};{' '}
+			<Bold>categoryColors</Bold> maps each pie or donut slice to a color), <Bold>height</Bold>,{' '}
 			<Bold>stacked</Bold>, <Bold>percent</Bold>, <Bold>horizontal</Bold> (bar), <Bold>area</Bold> (line),{' '}
 			<Bold>showDataLabels</Bold>. KpiCard: <Bold>valueKey</Bold>, <Bold>comparison</Bold> against the previous
 			row. DataTable: <Bold>columns</Bold>, <Bold>maxRows</Bold>, <Bold>conditionalFormats</Bold> (column → the

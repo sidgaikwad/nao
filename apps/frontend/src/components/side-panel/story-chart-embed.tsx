@@ -140,6 +140,7 @@ export function StoryChartEmbedShell({
 				data_key: s.data_key,
 				color: s.color || undefined,
 				label: s.label,
+				category_colors: s.category_colors,
 				is_total: s.is_total,
 				value_format: s.value_format,
 				series_type: s.series_type,

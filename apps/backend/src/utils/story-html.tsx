@@ -1780,9 +1780,10 @@ const TOOLTIP_SCRIPT_TEMPLATE = `
 		var pieColorMap=null;
 		if(cfg.chartType==='pie'||cfg.chartType==='donut'){
 			pieColorMap={};var ci=0;var seen={};
+			var sliceColors=(cfg.series[0]&&cfg.series[0].category_colors)||{};
 			cfg.data.forEach(function(d){
 				var v=String(d[cfg.xAxisKey]!=null?d[cfg.xAxisKey]:'');
-				if(!seen[v]){seen[v]=true;pieColorMap[v]=PIE_COLORS[ci%PIE_COLORS.length];ci++}
+				if(!seen[v]){seen[v]=true;pieColorMap[v]=sliceColors[v]||PIE_COLORS[ci%PIE_COLORS.length];ci++}
 			});
 		}
 
