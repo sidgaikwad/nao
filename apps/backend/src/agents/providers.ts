@@ -157,7 +157,8 @@ export const LLM_PROVIDERS: LlmProvidersType = {
 			const location = creds?.location || process.env.GOOGLE_VERTEX_LOCATION || 'global';
 
 			const googleAuthOptions = buildVertexAuthOptions(creds);
-			const config = { project, location, baseURL: settings.baseURL, googleAuthOptions };
+			const baseURL = settings.baseURL || getVertexMultiRegionBaseUrl(project, location, modelId);
+			const config = { project, location, baseURL, googleAuthOptions };
 
 			if (modelId.startsWith('claude-')) {
 				return createVertexAnthropic(config)(modelId);
@@ -682,6 +683,26 @@ function buildVertexAuthOptions(creds?: Record<string, string>) {
 	}
 
 	return undefined;
+}
+
+const VERTEX_MULTI_REGIONS = new Set(['eu', 'us']);
+
+/**
+ * Multi-region locations are only served by Google's `aiplatform.<location>.rep.googleapis.com` endpoint,
+ * while the Vertex SDK routes them to the legacy `<location>-aiplatform.googleapis.com` host.
+ */
+function getVertexMultiRegionBaseUrl(
+	project: string | undefined,
+	location: string,
+	modelId: string,
+): string | undefined {
+	if (!project || !VERTEX_MULTI_REGIONS.has(location)) {
+		return undefined;
+	}
+	const host = `https://aiplatform.${location}.rep.googleapis.com`;
+	return modelId.startsWith('claude-')
+		? `${host}/v1/projects/${project}/locations/${location}/publishers/anthropic/models`
+		: `${host}/v1beta1/projects/${project}/locations/${location}/publishers/google`;
 }
 
 const BEDROCK_REGION_PREFIXES = new Set(['us', 'eu', 'ap']);
