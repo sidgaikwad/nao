@@ -11,8 +11,7 @@ import { generateText, Output } from 'ai';
 
 import { disableModelReasoning, getProviderMeta, type ProviderModelResult } from '../../agents/providers';
 import { llmTelemetry } from '../../agents/telemetry';
-import * as llmConfigQueries from '../../queries/project-llm-config.queries';
-import { resolveDefaultModelSelection, resolveProviderModel } from '../../utils/llm';
+import { resolveDefaultModelSelection, resolveProjectModelProvider, resolveProviderModel } from '../../utils/llm';
 import { applyGuards, type GenerateResult, type GuardContext } from './guard';
 import { detectGround, type ImageSample, sampleImage } from './pixels';
 import { fallbackProposal, proposalSchema, renderSignals, type ThemeProposal } from './proposal';
@@ -404,7 +403,7 @@ async function proposeWithModel(
 
 async function resolveModel(projectId: string): Promise<ResolvedModel | null> {
 	const pinned = await resolveDefaultModelSelection(projectId, 'other');
-	const provider = pinned?.provider ?? (await llmConfigQueries.getProjectModelProvider(projectId));
+	const provider = pinned?.provider ?? (await resolveProjectModelProvider(projectId));
 	if (!provider) {
 		return null;
 	}

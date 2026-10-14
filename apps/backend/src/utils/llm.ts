@@ -16,6 +16,8 @@ import { type ConfigLlm, type ConfigLlmProvider, findConfigLlmProvider, readProj
 
 export { getDefaultModelId };
 
+const PREFERRED_TASK_PROVIDERS: LlmProvider[] = ['anthropic', 'openai'];
+
 /** Get the API key from environment for a provider */
 export function getEnvApiKey(provider: LlmProvider): string | undefined {
 	return process.env[getProviderMeta(provider).envVar];
@@ -63,17 +65,6 @@ export function getEnvBaseUrls(): Record<string, string> {
 			.map((p) => [p, getEnvBaseUrl(p)] as const)
 			.filter((entry): entry is [LlmProvider, string] => !!entry[1]),
 	);
-}
-
-/** Get the first available provider from env (preferring anthropic) */
-export function getDefaultEnvProvider(): LlmProvider | undefined {
-	if (hasEnvApiKey('anthropic')) {
-		return 'anthropic';
-	}
-	if (hasEnvApiKey('openai')) {
-		return 'openai';
-	}
-	return undefined;
 }
 
 /** Check if a model ID is known for a provider */
@@ -295,6 +286,17 @@ export async function resolveDefaultChatModel(projectId: string): Promise<LlmSel
 		getProjectAvailableModels(projectId),
 	]);
 	return selectDefaultChatModel(settings, available);
+}
+
+/**
+ * The provider background tasks (live stories, cron parsing, titles) use when no model is pinned: the
+ * first provider available to the project with a built-in model catalogue, preferring Anthropic then OpenAI.
+ */
+export async function resolveProjectModelProvider(projectId: string): Promise<LlmProvider | undefined> {
+	const providers = (await getProjectAvailableModels(projectId))
+		.map((model) => model.provider)
+		.filter((provider) => getDefaultModelId(provider));
+	return PREFERRED_TASK_PROVIDERS.find((provider) => providers.includes(provider)) ?? providers[0];
 }
 
 /** `resolveDefaultChatModel` over settings and a catalog the caller already loaded. */

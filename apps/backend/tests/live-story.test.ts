@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 	findMissingQueryIds: vi.fn(),
 	backfillMissingQueryData: vi.fn(),
 	generateText: vi.fn(),
-	getProjectModelProvider: vi.fn(),
+	resolveProjectModelProvider: vi.fn(),
 	resolveDefaultModelSelection: vi.fn(),
 	resolveProviderModel: vi.fn(),
 }));
@@ -39,10 +39,6 @@ vi.mock('../src/queries/chat.queries', () => ({
 	getChatInfo: mocks.getChatInfo,
 	getChatOwnerId: mocks.getChatOwnerId,
 	getChatProjectId: mocks.getChatProjectId,
-}));
-
-vi.mock('../src/queries/project-llm-config.queries', () => ({
-	getProjectModelProvider: mocks.getProjectModelProvider,
 }));
 
 vi.mock('../src/queries/story.queries', () => ({
@@ -79,6 +75,7 @@ vi.mock('../src/services/excluded-columns.service', () => ({
 vi.mock('../src/utils/llm', () => ({
 	getDefaultModelId: vi.fn(),
 	resolveDefaultModelSelection: mocks.resolveDefaultModelSelection,
+	resolveProjectModelProvider: mocks.resolveProjectModelProvider,
 	resolveProviderModel: mocks.resolveProviderModel,
 }));
 
@@ -156,7 +153,7 @@ describe('live story SQL execution', () => {
 		mocks.upsertStoryDataCache.mockResolvedValue({});
 		mocks.updateLatestVersionCode.mockResolvedValue(undefined);
 		mocks.resolveDefaultModelSelection.mockResolvedValue(null);
-		mocks.getProjectModelProvider.mockResolvedValue(null);
+		mocks.resolveProjectModelProvider.mockResolvedValue(undefined);
 	});
 
 	afterEach(() => {

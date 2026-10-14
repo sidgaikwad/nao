@@ -3,7 +3,6 @@ import type { LlmProvider, LlmSelectedModel } from '@nao/shared/types';
 
 import { getProviderMeta } from '../agents/providers';
 import * as projectQueries from '../queries/project.queries';
-import * as llmConfigQueries from '../queries/project-llm-config.queries';
 import * as mattermostConfigQueries from '../queries/project-mattermost-config.queries';
 import * as slackConfigQueries from '../queries/project-slack-config.queries';
 import * as teamsConfigQueries from '../queries/project-teams-config.queries';
@@ -13,6 +12,7 @@ import {
 	getDefaultModelId,
 	getProjectAvailableModels,
 	resolveAnnotationModelId,
+	resolveProjectModelProvider,
 	selectDefaultChatModel,
 } from '../utils/llm';
 import { mattermostService } from './mattermost';
@@ -81,7 +81,7 @@ async function resolveBuiltInTaskModels(
 	chat: LlmSelectedModel,
 	named: (selection: LlmSelectedModel) => ResolvedDefaultModel,
 ): Promise<BuiltInDefaultModels['categories']> {
-	const taskProvider = await llmConfigQueries.getProjectModelProvider(projectId);
+	const taskProvider = await resolveProjectModelProvider(projectId);
 	const annotationModel = async (fallbackModelId: string): Promise<LlmSelectedModel> => ({
 		provider: chat.provider,
 		modelId: await resolveAnnotationModelId(projectId, chat, fallbackModelId),

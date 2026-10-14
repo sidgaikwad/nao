@@ -16,14 +16,18 @@ import type { DBStoryDataCache } from '../db/abstractSchema';
 import { renderToMarkdown } from '../lib/markdown';
 import * as chatQueries from '../queries/chat.queries';
 import * as executeSqlQueries from '../queries/execute-sql.queries';
-import * as llmConfigQueries from '../queries/project-llm-config.queries';
 import { getQueryDataFromCode } from '../queries/shared-story.queries';
 import * as storyQueries from '../queries/story.queries';
 import * as storyFileQueries from '../queries/story-file.queries';
 import type { StoryQuerySources } from '../types/story-cache';
 import type { QueryResult, ToolContext } from '../types/tools';
 import { convertToTokenUsage } from '../utils/ai';
-import { getDefaultModelId, resolveDefaultModelSelection, resolveProviderModel } from '../utils/llm';
+import {
+	getDefaultModelId,
+	resolveDefaultModelSelection,
+	resolveProjectModelProvider,
+	resolveProviderModel,
+} from '../utils/llm';
 import { scheduleSaveLlmInferenceRecord } from '../utils/schedule-task';
 import { referencedQueryIds } from '../utils/sql-file-paths';
 import type { StoryNarrativeSource } from '../utils/story-kit-narratives';
@@ -498,7 +502,7 @@ type LiveStoryModel = NonNullable<Awaited<ReturnType<typeof resolveLiveStoryMode
 
 async function resolveLiveStoryModel(projectId: string) {
 	const pinned = await resolveDefaultModelSelection(projectId, 'live_story');
-	const provider = pinned?.provider ?? (await llmConfigQueries.getProjectModelProvider(projectId));
+	const provider = pinned?.provider ?? (await resolveProjectModelProvider(projectId));
 	if (!provider) {
 		return null;
 	}
