@@ -68,3 +68,40 @@ def test_connect_blocks_attach(duckdb_config: DuckDBConfig, tmp_path: Path) -> N
             conn.raw_sql(f"ATTACH '{other_db}' AS other")
     finally:
         conn.disconnect()
+
+
+@pytest.fixture
+def commented_config(tmp_path: Path) -> DuckDBConfig:
+    db_path = tmp_path / "commented.duckdb"
+    seed = duckdb.connect(str(db_path))
+    seed.execute("CREATE TABLE orders (id INTEGER, amount DOUBLE)")
+    seed.execute("COMMENT ON TABLE orders IS 'Customer orders'")
+    seed.execute("COMMENT ON COLUMN orders.id IS 'Order identifier'")
+    seed.close()
+    return DuckDBConfig(name="commented", path=str(db_path))
+
+
+def test_context_reads_table_comment(commented_config: DuckDBConfig) -> None:
+    conn = commented_config.connect()
+    try:
+        assert commented_config.create_context(conn, "main", "orders").description() == "Customer orders"
+    finally:
+        conn.disconnect()
+
+
+def test_context_reads_column_comments(commented_config: DuckDBConfig) -> None:
+    conn = commented_config.connect()
+    try:
+        columns = commented_config.create_context(conn, "main", "orders").columns()
+        descriptions = {col["name"]: col["description"] for col in columns}
+        assert descriptions == {"id": "Order identifier", "amount": None}
+    finally:
+        conn.disconnect()
+
+
+def test_context_without_comment_has_no_description(duckdb_config: DuckDBConfig) -> None:
+    conn = duckdb_config.connect()
+    try:
+        assert duckdb_config.create_context(conn, "main", "users").description() is None
+    finally:
+        conn.disconnect()
