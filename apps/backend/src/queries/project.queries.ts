@@ -22,6 +22,7 @@ import dbConfig, { Dialect } from '../db/dbConfig';
 import { env, isCloud } from '../env';
 import type { ListProjectChatsResponse, ProjectChatsFacetKey, UserWithRole } from '../types/project';
 import { HandlerError } from '../utils/error';
+import { userHasPassword } from './account.queries';
 import { createCostLookup, TOTAL_COST_EXPR } from './usage.queries';
 import { userMemberStatus } from './user.queries';
 
@@ -34,6 +35,7 @@ export type ProjectAccessSource = 'project' | 'organization' | 'both';
 
 export interface UserWithProjectAccessDetails extends UserWithRole {
 	source: ProjectAccessSource;
+	hasPassword: boolean;
 }
 
 export const getProjectByPath = async (path: string): Promise<DBProject | null> => {
@@ -219,6 +221,7 @@ export const listUsersWithProjectAccessDetails = async (projectId: string): Prom
 				when ${s.projectMember.userId} is not null then 'project'
 				else 'organization'
 			end`,
+			hasPassword: userHasPassword,
 		})
 		.from(s.user)
 		.leftJoin(s.projectMember, and(eq(s.projectMember.userId, s.user.id), eq(s.projectMember.projectId, projectId)))

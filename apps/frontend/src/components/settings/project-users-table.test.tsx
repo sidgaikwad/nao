@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReadOnlyProjectUsers, ProjectUsersTable } from './project-users-table';
+import type { ProjectUser } from './project-users-table';
 import type { MouseEventHandler, ReactNode } from 'react';
 
 const mocks = vi.hoisted(() => ({
@@ -99,6 +100,7 @@ const admin = {
 	role: 'admin' as const,
 	status: 'active' as const,
 	source: 'project' as const,
+	hasPassword: true,
 };
 const projectUser = {
 	id: 'project-user',
@@ -107,6 +109,7 @@ const projectUser = {
 	role: 'user' as const,
 	status: 'active' as const,
 	source: 'project' as const,
+	hasPassword: true,
 };
 const organizationUser = {
 	id: 'organization-user',
@@ -115,6 +118,7 @@ const organizationUser = {
 	role: 'viewer' as const,
 	status: 'active' as const,
 	source: 'organization' as const,
+	hasPassword: true,
 };
 
 beforeEach(() => {
@@ -251,6 +255,31 @@ describe('ProjectUsersTable member management', () => {
 		expect(screen.getByRole('menuitem', { name: 'Edit user' })).toBeTruthy();
 		expect(screen.queryByRole('menuitem', { name: 'Reset password' })).toBeNull();
 	});
+
+	it('hides the reset password action when password login is disabled', () => {
+		mocks.useQuery.mockReturnValue({ data: { naoMode: 'self-hosted', enableUserLogin: false } });
+		renderTable();
+
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for Project User' }), {
+			button: 0,
+			ctrlKey: false,
+		});
+
+		expect(screen.getByRole('menuitem', { name: 'Edit user' })).toBeTruthy();
+		expect(screen.queryByRole('menuitem', { name: 'Reset password' })).toBeNull();
+	});
+
+	it('hides the reset password action for users without a password', () => {
+		renderTable([admin, { ...projectUser, hasPassword: false }]);
+
+		fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for Project User' }), {
+			button: 0,
+			ctrlKey: false,
+		});
+
+		expect(screen.getByRole('menuitem', { name: 'Edit user' })).toBeTruthy();
+		expect(screen.queryByRole('menuitem', { name: 'Reset password' })).toBeNull();
+	});
 });
 
 describe('ReadOnlyProjectUsers', () => {
@@ -276,11 +305,11 @@ describe('ReadOnlyProjectUsers', () => {
 	});
 });
 
-function renderTable() {
+function renderTable(projectUsers: ProjectUser[] = [admin, projectUser]) {
 	return render(
 		<ProjectUsersTable
 			canManage
-			projectUsers={[admin, projectUser]}
+			projectUsers={projectUsers}
 			organizationUsers={[organizationUser]}
 			groups={groups}
 			membershipKeys={new Set(['all-users:admin-id', 'all-users:project-user', 'all-users:organization-user'])}
