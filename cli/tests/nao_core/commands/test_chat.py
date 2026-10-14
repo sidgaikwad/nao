@@ -1,7 +1,9 @@
+from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from rich.console import Console
 
 from nao_core.commands.chat import (
     build_llm_env,
@@ -12,6 +14,7 @@ from nao_core.commands.chat import (
     resolve_ports,
     start_ngrok_tunnel,
     stop_ngrok,
+    stream_server_logs,
     wait_for_server,
 )
 from nao_core.config.base import NaoConfig, NaoConfigError
@@ -205,6 +208,25 @@ class TestWaitForServer:
 
 
 @pytest.mark.usefixtures("clean_env")
+class TestStreamServerLogs:
+    def test_prints_log_lines_containing_markup_verbatim(self):
+        output = StringIO()
+        process = MagicMock(stdout=["GET /api [/health] 200\n", "[bold]not styled[/bold]\n"])
+
+        with patch("nao_core.commands.chat.console", Console(file=output, width=200)):
+            stream_server_logs(process)
+
+        assert output.getvalue() == "GET /api [/health] 200\n[bold]not styled[/bold]\n"
+
+    def test_does_nothing_without_stdout(self):
+        process = MagicMock(stdout=None)
+
+        with patch("nao_core.commands.chat.console") as mock_console:
+            stream_server_logs(process)
+
+        mock_console.print.assert_not_called()
+
+
 class TestResolvePorts:
     def test_uses_defaults_when_nothing_is_set(self):
         assert resolve_ports(None, None) == (5005, 8005)
