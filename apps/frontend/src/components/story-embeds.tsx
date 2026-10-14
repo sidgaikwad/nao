@@ -29,7 +29,7 @@ function EmbedPlaceholder({ children }: { children: React.ReactNode }) {
 	);
 }
 
-function EmbedLoading({ label = 'Loading live data...' }: { label?: string }) {
+export function EmbedLoading({ label = 'Loading live data...' }: { label?: string }) {
 	return (
 		<EmbedPlaceholder>
 			<span className='flex items-center justify-center'>
