@@ -12,6 +12,7 @@ export const KIT_STYLES = `
 .nao-block__action svg{width:13px;height:13px}
 .nao-block__action[aria-pressed=true]{background:color-mix(in srgb, var(--muted-foreground) 14%, transparent);color:var(--foreground)}
 .nao-block__action:hover{background:color-mix(in srgb, var(--muted-foreground) 14%, transparent);color:var(--foreground)}
+@media (hover:hover){.nao-block__actions{opacity:0;transition:opacity 150ms ease-out}.nao-block:hover>.nao-block__header>.nao-block__actions,.nao-block:focus-within>.nao-block__header>.nao-block__actions,.nao-block__actions:has([aria-pressed=true]){opacity:1}}
 .nao-sql{margin:0;max-height:320px;overflow:auto;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;white-space:pre;color:var(--foreground);background:color-mix(in srgb, var(--muted) 50%, transparent);border:1px solid var(--border);border-radius:var(--radius-sm)}
 .nao-sql__keyword{color:var(--primary);font-weight:600}
 .nao-sql__string{color:var(--chart-2)}
