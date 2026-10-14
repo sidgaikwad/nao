@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
 	assertProjectCloudBillingAccess: vi.fn(),
 	buildToolContext: vi.fn(),
 	executeQuery: vi.fn(),
-	getLatestExecuteSqlByQueryId: vi.fn(),
+	getLatestExecuteSqlByQueryIdInChat: vi.fn(),
 	updateExecuteSqlPart: vi.fn(),
 }));
 
@@ -12,7 +12,7 @@ vi.mock('../src/auth', () => ({ getSession: vi.fn() }));
 vi.mock('../src/agents/tools/execute-sql', () => ({ executeQuery: mocks.executeQuery }));
 vi.mock('../src/queries/execute-sql.queries', () => ({
 	EXECUTE_SEMANTIC_QUERY_TOOL_NAME: 'execute_semantic_query',
-	getLatestExecuteSqlByQueryId: mocks.getLatestExecuteSqlByQueryId,
+	getLatestExecuteSqlByQueryIdInChat: mocks.getLatestExecuteSqlByQueryIdInChat,
 	updateExecuteSqlPart: mocks.updateExecuteSqlPart,
 }));
 vi.mock('../src/queries/organization.queries', () => ({}));
@@ -44,17 +44,24 @@ const existingSqlQuery = {
 describe('SQL edit routes', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mocks.getLatestExecuteSqlByQueryId.mockResolvedValue(existingSqlQuery);
+		mocks.getLatestExecuteSqlByQueryIdInChat.mockResolvedValue(existingSqlQuery);
 		mocks.buildToolContext.mockResolvedValue({});
 		mocks.executeQuery.mockResolvedValue(existingSqlQuery.toolOutput);
 	});
 
 	it.each(['previewQuery', 'updateQuery'] as const)('resolves the stored query once for %s', async (route) => {
-		await createCaller().sql[route]({ queryId: 'query_1', sql_query: 'select 2' });
+		await createCaller().sql[route]({ chatId: 'chat-id', queryId: 'query_1', sql_query: 'select 2' });
 
-		expect(mocks.getLatestExecuteSqlByQueryId).toHaveBeenCalledTimes(1);
-		expect(mocks.getLatestExecuteSqlByQueryId).toHaveBeenCalledWith('query_1');
+		expect(mocks.getLatestExecuteSqlByQueryIdInChat).toHaveBeenCalledTimes(1);
+		expect(mocks.getLatestExecuteSqlByQueryIdInChat).toHaveBeenCalledWith('chat-id', 'query_1');
 		expect(mocks.assertProjectCloudBillingAccess).toHaveBeenCalledWith('project-id');
+	});
+
+	it('requires the chat the query belongs to', async () => {
+		await expect(
+			createCaller().sql.updateQuery({ queryId: 'query_1', sql_query: 'select 2' } as never),
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(mocks.getLatestExecuteSqlByQueryIdInChat).not.toHaveBeenCalled();
 	});
 });
 
