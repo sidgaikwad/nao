@@ -1,5 +1,7 @@
 import { IncomingHttpHeaders } from 'node:http';
 
+import { describeLlmError } from './llm-error';
+
 /** Convert fastify headers to basic `Headers` for better-auth. */
 export const convertHeaders = (headers: IncomingHttpHeaders) => {
 	const convertedHeaders = new Headers();
@@ -26,6 +28,10 @@ export const getErrorMessage = (error: unknown): string | null => {
 };
 
 export const formatErrorMessageForUI = (error: unknown): string => {
+	const llmError = describeLlmError(error);
+	if (llmError) {
+		return JSON.stringify({ error: llmError });
+	}
 	if (isTypeValidationError(error)) {
 		const payload = error.value;
 		if (isProviderErrorPayload(payload)) {

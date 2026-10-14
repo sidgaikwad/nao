@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { ChatError } from './chat-error';
+import { CONNECTION_LOST_MESSAGE } from '@/lib/connection-error';
 
 const mocks = vi.hoisted(() => ({
 	access: {
@@ -170,4 +171,13 @@ it('shows parsed provider details for a non-billing error without loading billin
 
 	fireEvent.click(screen.getByRole('button', { name: 'Copy provider request ID' }));
 	expect(mocks.copy).toHaveBeenCalledWith('request-id');
+});
+
+it('explains a stream the browser reports as a bare network error', () => {
+	mocks.error = new TypeError('network error');
+
+	render(<ChatError />);
+
+	expect(screen.getByText(CONNECTION_LOST_MESSAGE)).toBeTruthy();
+	expect(screen.queryByText('network error')).toBeNull();
 });

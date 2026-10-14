@@ -7,6 +7,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useOpenOrganizationBilling } from '@/hooks/use-open-organization-billing';
 import { parseBudgetError } from '@/lib/ai';
 import { isCloudBillingAccessError } from '@/lib/cloud-billing-access';
+import { describeConnectionError } from '@/lib/connection-error';
 import { cn } from '@/lib/utils';
 
 export interface Props {
@@ -35,7 +36,7 @@ function parseError(error: Error): ParsedError {
 			message: asString(parsed?.message),
 		};
 	} catch {
-		return { message: error.message };
+		return { message: describeConnectionError(error.message) ?? error.message };
 	}
 }
 
