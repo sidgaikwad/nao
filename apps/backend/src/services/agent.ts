@@ -66,7 +66,7 @@ import {
 	resolveProviderSettings,
 } from '../utils/llm';
 import { logger } from '../utils/logger';
-import { sanitizeToolCallIds } from '../utils/model-message';
+import { normalizeToolCallInputs, sanitizeToolCallIds } from '../utils/model-message';
 import { extractConfiguredDatabases, readProjectContext } from '../utils/nao-config';
 import { addPromptCache, cachedSystemInstructions } from '../utils/prompt-cache';
 import { scheduleSaveLlmInferenceRecord } from '../utils/schedule-task';
@@ -482,7 +482,8 @@ class AgentManager {
 		return this._modelConfig.callSettings?.maxOutputTokens ?? MAX_OUTPUT_TOKENS;
 	}
 
-	private async _prepareStep(messages: ModelMessage[]): Promise<{ messages: ModelMessage[] }> {
+	private async _prepareStep(stepMessages: ModelMessage[]): Promise<{ messages: ModelMessage[] }> {
+		const messages = normalizeToolCallInputs(stepMessages);
 		const workingMessages: ModelMessage[] =
 			this._systemPrompt && messages[0]?.role !== 'system'
 				? [{ role: 'system', content: this._systemPrompt }, ...messages]

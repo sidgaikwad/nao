@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 
 import { type LlmProvider, providerKind } from '@nao/shared/types';
-import type { ModelMessage } from 'ai';
+import type { AssistantModelMessage, ModelMessage, ToolCallPart } from 'ai';
+
+type AssistantContentPart = Exclude<AssistantModelMessage['content'], string>[number];
 
 const TOOL_CALL_ID_MAX_LENGTH = 64;
 const TOOL_CALL_ID_SAFE_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -28,6 +30,27 @@ export function sanitizeToolCallIds(messages: ModelMessage[], provider: LlmProvi
 			return { ...part, toolCallId: toProviderSafeToolCallId(part.toolCallId, provider) };
 		});
 		return { ...message, content } as ModelMessage;
+	});
+}
+
+/**
+ * Providers reject a tool call whose input is not a JSON object (Bedrock: "toolUse.input is invalid", Anthropic:
+ * "input should be a valid dictionary"), which fails every later turn of the chat. An invalid call can keep its raw
+ * argument text or a non-object value such as `null` or an array, so it is replaced with the object parsed from it,
+ * or `{}`. The paired tool result keeps the original error, so the model still learns the call failed.
+ */
+export function normalizeToolCallInputs(messages: ModelMessage[]): ModelMessage[] {
+	return messages.map((message) => {
+		if (message.role !== 'assistant' || !Array.isArray(message.content)) {
+			return message;
+		}
+		if (!message.content.some(hasNonObjectToolCallInput)) {
+			return message;
+		}
+		const content = message.content.map((part) =>
+			hasNonObjectToolCallInput(part) ? { ...part, input: toToolCallInputObject(part.input) } : part,
+		);
+		return { ...message, content };
 	});
 }
 
@@ -61,6 +84,26 @@ function toSafeToolCallId(toolCallId: string): string {
 		.replace(/[^a-zA-Z0-9_-]/g, '_')
 		.slice(0, TOOL_CALL_ID_MAX_LENGTH - TOOL_CALL_ID_HASH_LENGTH - 1);
 	return `${cleaned}_${hash}`;
+}
+
+function hasNonObjectToolCallInput(part: AssistantContentPart): part is ToolCallPart {
+	return part.type === 'tool-call' && !isPlainObject(part.input);
+}
+
+function toToolCallInputObject(input: unknown): Record<string, unknown> {
+	if (typeof input !== 'string') {
+		return {};
+	}
+	try {
+		const parsed: unknown = JSON.parse(input);
+		return isPlainObject(parsed) ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
