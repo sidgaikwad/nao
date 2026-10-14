@@ -8,7 +8,8 @@ import { MarkdownTable } from '@/components/chat-messages/markdown-table';
 import { StreamingMarkdown } from '@/components/chat-messages/streaming-markdown';
 import { FileChip } from '@/components/file-chip';
 import { isStoredFilePath } from '@/lib/attachments';
-import { markdownPlugins } from '@/lib/markdown';
+import { markdownPlugins, transformMarkdownOutsideCodeBlocks } from '@/lib/markdown';
+import { normalizeMathDelimiters } from '@/lib/markdown-math';
 
 const CLOBBER_PREFIX = 'user-content-';
 const SETTLED_COMPONENTS = {
@@ -42,7 +43,7 @@ export const AssistantTextWithCitation = memo(({ text, isStreaming }: { text: st
 			literalTagContent={LITERAL_TAG_CONTENT}
 			components={SETTLED_COMPONENTS}
 		>
-			{unwrapBacktickedSavedFiles(text)}
+			{normalizeMathDelimiters(unwrapBacktickedSavedFiles(text))}
 		</Streamdown>
 	);
 });
@@ -54,7 +55,7 @@ function unwrapBacktickedSavedFiles(markdown: string): string {
 }
 
 function prepareStreamingMarkdown(markdown: string): string {
-	return transformMarkdownOutsideCodeBlocks(markdown, suppressBacktickedSavedFiles);
+	return normalizeMathDelimiters(transformMarkdownOutsideCodeBlocks(markdown, suppressBacktickedSavedFiles));
 }
 
 function suppressBacktickedSavedFiles(line: string): string {
@@ -123,52 +124,6 @@ function findClosingBacktick(line: string, offset: number): number {
 
 function isSingleUnescapedBacktick(line: string, offset: number): boolean {
 	return line[offset - 1] !== '\\' && line[offset - 1] !== '`' && line[offset + 1] !== '`';
-}
-
-function transformMarkdownOutsideCodeBlocks(markdown: string, transformLine: (line: string) => string): string {
-	let fence: { marker: string; length: number } | undefined;
-
-	return markdown
-		.split('\n')
-		.map((line) => {
-			const fenceMarker = getFenceMarker(line);
-			if (fence) {
-				if (
-					fenceMarker?.marker === fence.marker &&
-					fenceMarker.length >= fence.length &&
-					fenceMarker.isClosing
-				) {
-					fence = undefined;
-				}
-				return line;
-			}
-
-			if (fenceMarker) {
-				fence = fenceMarker;
-				return line;
-			}
-
-			if (/^(?: {4}|\t)/.test(line)) {
-				return line;
-			}
-
-			return transformLine(line);
-		})
-		.join('\n');
-}
-
-function getFenceMarker(line: string): { marker: string; length: number; isClosing: boolean } | undefined {
-	const match = /^(?:(?: {0,3}>[ \t]?)|(?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+))* {0,3}(`{3,}|~{3,})(.*)\r?$/.exec(line);
-	if (!match) {
-		return undefined;
-	}
-
-	const marker = match[1][0];
-	return {
-		marker,
-		length: match[1].length,
-		isClosing: match[2].trim().length === 0,
-	};
 }
 
 /** A file the answer hands over. One nao cannot reach stays as the text the model wrote. */

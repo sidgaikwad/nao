@@ -57,6 +57,38 @@ export function joinMarkdownFrontmatter(frontmatter: string | null, body: string
 /** Streamdown plugins shared across all markdown surfaces (KaTeX math rendering). */
 export const markdownPlugins: PluginConfig = { math };
 
+export function transformMarkdownOutsideCodeBlocks(markdown: string, transformLine: (line: string) => string): string {
+	let fence: { marker: string; length: number } | undefined;
+
+	return markdown
+		.split('\n')
+		.map((line) => {
+			const fenceMarker = getFenceMarker(line);
+			if (fence) {
+				if (
+					fenceMarker?.marker === fence.marker &&
+					fenceMarker.length >= fence.length &&
+					fenceMarker.isClosing
+				) {
+					fence = undefined;
+				}
+				return line;
+			}
+
+			if (fenceMarker) {
+				fence = fenceMarker;
+				return line;
+			}
+
+			if (/^(?: {4}|\t)/.test(line)) {
+				return line;
+			}
+
+			return transformLine(line);
+		})
+		.join('\n');
+}
+
 function getLineContent(content: string, start: number, end: number): string {
 	const lineEnd = end > start && content[end - 1] === '\r' ? end - 1 : end;
 	return content.slice(start, lineEnd);
@@ -104,4 +136,18 @@ function stripSurroundingQuotes(value: string): string {
 		return value.slice(1, -1).trim();
 	}
 	return value;
+}
+
+function getFenceMarker(line: string): { marker: string; length: number; isClosing: boolean } | undefined {
+	const match = /^(?:(?: {0,3}>[ \t]?)|(?: {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+))* {0,3}(`{3,}|~{3,})(.*)\r?$/.exec(line);
+	if (!match) {
+		return undefined;
+	}
+
+	const marker = match[1][0];
+	return {
+		marker,
+		length: match[1].length,
+		isClosing: match[2].trim().length === 0,
+	};
 }
