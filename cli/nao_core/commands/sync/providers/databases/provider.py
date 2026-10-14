@@ -269,7 +269,6 @@ def sync_database(
         total_errors = 0
 
         schema_tables: dict[str, list[str]] = {}
-        failed_schemas: set[str] = set()
         failed_tables: set[tuple[str, str]] = set()
 
         for schema in schemas:
@@ -278,7 +277,7 @@ def sync_database(
                 all_tables = conn.list_tables(database=schema)
             except Exception as e:
                 UI.print(f"  [yellow]⚠[/yellow] [dim]Skipping schema[/dim] {schema}: {_fmt_error(e)}")
-                failed_schemas.add(schema)
+                state.add_failed_schema(schema)
                 progress.update(schema_task, advance=1)
                 continue
 
@@ -456,7 +455,7 @@ def sync_database(
             db_folder,
             catalog_project_path,
             partial=bool(select),
-            preserved_schemas=failed_schemas,
+            preserved_schemas=state.failed_schemas,
             preserved_tables=failed_tables,
         )
         return state

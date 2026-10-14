@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from nao_core.commands.sync.cleanup import cleanup_stale_paths
 from nao_core.commands.sync.providers.databases.provider import sync_database
 from nao_core.config.databases.base import DatabaseTemplate
 
@@ -201,3 +202,32 @@ class TestSyncDatabaseConnectionCleanup:
             run_sync_with_mocks(db_config, engine, tmp_path, mock_progress)
 
         mock_conn.disconnect.assert_called_once()
+
+
+class TestSyncDatabaseSchemaListingFailure:
+    """Test that a schema whose tables cannot be listed keeps its existing context."""
+
+    def test_failed_schema_listing_preserves_existing_context(self, tmp_path, mock_progress):
+        db_config = create_mock_db_config(schemas=["healthy", "flaky"], tables=["users"])
+        db_config.get_semantic_views.return_value = []
+        mock_conn = db_config.connect.return_value
+        mock_conn.list_tables.side_effect = _list_tables_or_fail
+        existing_table = tmp_path / "type=duckdb" / "database=test_database" / "schema=flaky" / "table=orders"
+        existing_table.mkdir(parents=True)
+        engine = create_mock_engine(
+            templates=["databases/columns.md.j2"],
+            render_behavior=lambda *a, **kw: "# test",
+        )
+
+        state, _ = run_sync_with_mocks(db_config, engine, tmp_path, mock_progress)
+        removed = cleanup_stale_paths(state)
+
+        assert state.failed_schemas == {"flaky"}
+        assert removed == 0
+        assert existing_table.exists()
+
+
+def _list_tables_or_fail(database: str) -> list[str]:
+    if database == "flaky":
+        raise RuntimeError("permission denied")
+    return ["users"]
