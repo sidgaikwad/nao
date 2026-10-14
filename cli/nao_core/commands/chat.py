@@ -8,6 +8,7 @@ from time import sleep
 from typing import Annotated, Optional
 
 from cyclopts import Parameter
+from rich.markup import escape
 
 from nao_core import __version__, native
 from nao_core.branding import should_show_banner
@@ -90,6 +91,14 @@ def wait_for_server(port: int, timeout: int = 30) -> bool:
             pass
         sleep(0.1)
     return False
+
+
+def stream_server_logs(process: subprocess.Popen[str]) -> None:
+    """Echo server output dimmed, escaping it so log lines are never parsed as Rich markup."""
+    if not process.stdout:
+        return
+    for line in process.stdout:
+        console.print(f"[dim]{escape(line.rstrip())}[/dim]")
 
 
 def ensure_auth_secret(bin_dir: Path) -> str | None:
@@ -345,9 +354,7 @@ def chat(
             console.print("[bold yellow]⚠[/bold yellow] Chat server is taking longer than expected to start...")
             console.print(f"[dim]Check http://localhost:{port} manually[/dim]")
 
-        if chat_process.stdout:
-            for line in chat_process.stdout:
-                console.print(f"[dim]{line.rstrip()}[/dim]")
+        stream_server_logs(chat_process)
 
         chat_process.wait()
 
