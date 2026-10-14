@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SettingsCard } from '@/components/ui/settings-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useIsCloud } from '@/hooks/use-nao-mode';
+import { useIsAdminPasswordResetEnabled } from '@/hooks/use-admin-password-reset';
 import { useSession } from '@/lib/auth-client';
 import { trpc } from '@/main';
 
@@ -41,6 +41,7 @@ export interface ProjectUser {
 	role: UserRole;
 	status: MemberStatus;
 	source: ProjectAccessSource;
+	hasPassword: boolean;
 }
 
 export interface AssignableUserGroup {
@@ -133,7 +134,7 @@ function ManagedProjectUsersTable({
 }: ManagedProjectUsersTableProps) {
 	const { data: session } = useSession();
 	const queryClient = useQueryClient();
-	const isCloud = useIsCloud();
+	const isPasswordResetEnabled = useIsAdminPasswordResetEnabled();
 
 	const [isAddOpen, setIsAddOpen] = useState(false);
 	const [editMember, setEditMember] = useState<ProjectUser | null>(null);
@@ -211,7 +212,7 @@ function ManagedProjectUsersTable({
 		memberActions: {
 			onEdit: setEditMember,
 			onRemove: setRemoveMember,
-			onResetPassword: isCloud ? undefined : setResetPasswordMember,
+			onResetPassword: isPasswordResetEnabled ? setResetPasswordMember : undefined,
 		},
 		onOpenUser,
 	};
@@ -482,7 +483,7 @@ function MemberRowActions({ user, actions }: { user: ProjectUser; actions: Proje
 			<DropdownMenuContent align='end' onClick={(event) => event.stopPropagation()}>
 				<DropdownMenuGroup>
 					<DropdownMenuItem onSelect={() => onEdit(user)}>Edit user</DropdownMenuItem>
-					{onResetPassword && (
+					{onResetPassword && user.hasPassword && (
 						<DropdownMenuItem onSelect={() => onResetPassword(user)}>Reset password</DropdownMenuItem>
 					)}
 					<DropdownMenuItem className='text-destructive' onSelect={() => onRemove(user)}>

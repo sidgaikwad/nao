@@ -5,6 +5,7 @@ import s, { DBOrganization, DBOrgMember, NewOrganization, NewOrgMember } from '.
 import { db } from '../db/db';
 import { env } from '../env';
 import { OrgRole } from '../types/organization';
+import { userHasPassword } from './account.queries';
 import * as projectQueries from './project.queries';
 import * as userQueries from './user.queries';
 
@@ -420,6 +421,7 @@ export interface OrgMemberWithUser {
 	email: string;
 	role: OrgRole;
 	status: MemberStatus;
+	hasPassword: boolean;
 }
 
 export interface OrgProjectWithAccess {
@@ -466,6 +468,7 @@ export const listOrgMembersWithUsers = async (orgId: string): Promise<OrgMemberW
 			email: s.user.email,
 			role: s.orgMember.role,
 			status: userQueries.userMemberStatus,
+			hasPassword: userHasPassword,
 		})
 		.from(s.orgMember)
 		.innerJoin(s.user, eq(s.orgMember.userId, s.user.id))

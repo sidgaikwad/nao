@@ -1,9 +1,16 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import s from '../db/abstractSchema';
 import { db } from '../db/db';
 
 const CREDENTIAL_PROVIDER_ID = 'credential';
+
+export const userHasPassword = sql<boolean>`exists(
+	select 1 from ${s.account}
+	where ${s.account.userId} = ${s.user.id}
+		and ${s.account.providerId} = ${CREDENTIAL_PROVIDER_ID}
+		and ${s.account.password} is not null
+)`.mapWith(Boolean);
 
 export const getAccountById = async (userId: string): Promise<{ id: string; password: string | null } | null> => {
 	const [account] = await db
