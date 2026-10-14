@@ -53,6 +53,12 @@ export const YAxisSideEnum = z.enum(['left', 'right']);
 export const SeriesConfigSchema = z.object({
 	data_key: z.string().describe('Column name from SQL result to plot.'),
 	color: z.string().describe('CSS color (defaults to theme colors).').optional(),
+	category_colors: z
+		.record(z.string(), z.string())
+		.describe(
+			'Pie and donut charts only: CSS color of each slice, keyed by its x_axis_key value, e.g. { "Europe": "#2563eb", "Asia": "#f59e0b" }. Use it when the user asks for specific slice colors; slices not listed keep the theme colors. Use "Other" as the key for the bucket of small slices.',
+		)
+		.optional(),
 	label: z.string().describe('Label to display in the legend.').optional(),
 	value_format: ValueFormatSchema.describe(
 		'Controls how this series\' numeric values render on the axis, tooltip, data labels, and KPI card. The number is formatted as-is: use prefix for any currency symbol and suffix for percentages or units; never use d3\'s "%" type because it multiplies by 100. Examples: USD { d3_format: ",.2f", prefix: "$", compact: "financial" }; percentage stored as 42.5 { d3_format: ".1f", suffix: "%" }; volts { d3_format: ",.0f", suffix: " V" }; bytes { d3_format: ".2s", suffix: "B", compact: "si" }.',

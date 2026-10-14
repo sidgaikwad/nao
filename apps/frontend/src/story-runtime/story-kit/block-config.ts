@@ -19,6 +19,7 @@ export type SeriesInput =
 			key: string;
 			label?: string;
 			color?: string;
+			categoryColors?: Record<string, string>;
 			valueFormat?: displayChart.ValueFormat;
 			isTotal?: boolean;
 			type?: displayChart.SeriesType;
@@ -84,6 +85,7 @@ export function toSeriesConfigs(series: SeriesSpec[], options: FormatOptions): d
 			data_key: spec.key,
 			label: spec.label,
 			color: spec.color,
+			category_colors: spec.categoryColors,
 			value_format: spec.valueFormat ?? chartFormat,
 			is_total: spec.isTotal,
 			series_type: spec.type,
@@ -224,6 +226,7 @@ function toSeriesInput(series: displayChart.SeriesConfig): SeriesInput {
 		key: series.data_key,
 		label: series.label && series.label !== labelize(series.data_key) ? series.label : undefined,
 		color: series.color,
+		categoryColors: series.category_colors,
 		valueFormat: series.value_format,
 		isTotal: series.is_total,
 		type: series.series_type,

@@ -319,6 +319,14 @@ export function defaultColorFor(_key: string, index: number): string {
 	return DEFAULT_COLORS[index % DEFAULT_COLORS.length];
 }
 
+export function pieSliceColor(
+	series: displayChart.SeriesConfig | undefined,
+	category: string,
+	fallbackColor: string,
+): string {
+	return series?.category_colors?.[category] || fallbackColor;
+}
+
 export interface BuildChartProps {
 	data: Record<string, unknown>[];
 	chartType: ChartType;
@@ -1517,7 +1525,7 @@ function buildPieChart(props: ResolvedProps) {
 	// Callers are expected to bucket the data (see `bucketPieData`) so the legend
 	// and slices share one set; the builder does not re-bucket here.
 	const uniqueValues = [...new Set(data.map((d) => String(d[xAxisKey])))];
-	const colorMap = new Map(uniqueValues.map((v, i) => [v, colorFor(v, i)]));
+	const colorMap = new Map(uniqueValues.map((v, i) => [v, pieSliceColor(series[0], v, colorFor(v, i))]));
 
 	const dataWithColors = data.map((item) => ({
 		...item,

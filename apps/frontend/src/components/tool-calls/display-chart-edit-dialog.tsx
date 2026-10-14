@@ -1,9 +1,10 @@
-import { computeKpiComparison, DEFAULT_COLORS } from '@nao/shared';
+import { bucketPieData, computeKpiComparison, DEFAULT_COLORS, resolveDataKey } from '@nao/shared';
 import {
 	chartTypeSupportsAxisLabels,
 	chartTypeSupportsComboSeries,
 	isBuiltinChartType,
 	isPercentStackedChartType,
+	isPieChart,
 	isStackedChartType,
 	resolveShowDataLabels,
 } from '@nao/shared/chart-types';
@@ -200,6 +201,11 @@ export function ChartConfigEditForm({
 		[draft.chart_type, draft.x_axis_key, draft.series, data],
 	);
 	const isCombo = chartTypeSupportsComboSeries(draft.chart_type);
+	const isPie = isPieChart(draft.chart_type);
+	const pieCategories = useMemo(
+		() => (isPie ? listPieCategories(data, draft.x_axis_key, draft.series[0]?.data_key) : []),
+		[isPie, data, draft.x_axis_key, draft.series],
+	);
 	const hasRightAxis = isCombo && displayChart.hasRightAxisSeries(draft.series);
 	const hasLeftAxis = !isCombo || draft.series.some((s) => s.y_axis !== 'right');
 
@@ -259,6 +265,10 @@ export function ChartConfigEditForm({
 			...prev,
 			series: prev.series.map((s, i) => (i === index ? { ...s, ...patch } : s)),
 		}));
+	};
+
+	const updateSliceColor = (category: string, color: string) => {
+		updateSeriesAt(0, { category_colors: { ...draft.series[0]?.category_colors, [category]: color } });
 	};
 
 	const updateSeriesValueFormatAt = (index: number, field: 'd3_format' | 'prefix' | 'suffix', value: string) => {
@@ -509,13 +519,16 @@ export function ChartConfigEditForm({
 									/>
 								)}
 								<ValueFormatToggle unit={unit} open={isOpen} onClick={() => toggleValueFormat(index)} />
-								<input
-									type='color'
-									aria-label='Series color'
-									value={normalizeHexColor(series.color, paletteHexes[index % paletteHexes.length])}
-									onChange={(e) => updateSeriesAt(index, { color: e.target.value })}
-									className='h-8 w-8 cursor-pointer overflow-hidden rounded-lg border-none bg-transparent p-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg [&::-webkit-color-swatch]:border-none'
-								/>
+								{!isPie && (
+									<ColorInput
+										ariaLabel='Series color'
+										value={normalizeHexColor(
+											series.color,
+											paletteHexes[index % paletteHexes.length],
+										)}
+										onChange={(color) => updateSeriesAt(index, { color })}
+									/>
+								)}
 								<Button
 									type='button'
 									size='icon-sm'
@@ -663,6 +676,25 @@ export function ChartConfigEditForm({
 							)}
 						</div>
 					)}
+
+			{pieCategories.length > 0 && (
+				<div className='grid gap-2 py-2'>
+					<span className='text-sm font-semibold text-foreground'>Slice colors</span>
+					{pieCategories.map((category, index) => (
+						<div key={category} className='flex items-center justify-between gap-2'>
+							<span className='truncate text-sm text-foreground'>{category}</span>
+							<ColorInput
+								ariaLabel={`${category} color`}
+								value={normalizeHexColor(
+									draft.series[0]?.category_colors?.[category],
+									paletteHexes[index % paletteHexes.length],
+								)}
+								onChange={(color) => updateSliceColor(category, color)}
+							/>
+						</div>
+					))}
+				</div>
+			)}
 
 			<div className='grid gap-2'>
 				<span className='text-sm font-semibold text-foreground'>Options</span>
@@ -935,6 +967,24 @@ function MinMaxFields({ minId, maxId, minValue, maxValue, onMinChange, onMaxChan
 	);
 }
 
+interface ColorInputProps {
+	ariaLabel: string;
+	value: string;
+	onChange: (color: string) => void;
+}
+
+function ColorInput({ ariaLabel, value, onChange }: ColorInputProps) {
+	return (
+		<input
+			type='color'
+			aria-label={ariaLabel}
+			value={value}
+			onChange={(e) => onChange(e.target.value)}
+			className='h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border-none bg-transparent p-0 [&::-moz-color-swatch]:rounded-lg [&::-moz-color-swatch]:border-none [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-lg [&::-webkit-color-swatch]:border-none'
+		/>
+	);
+}
+
 interface SeriesTypeSelectProps {
 	value: displayChart.SeriesType;
 	onChange: (value: displayChart.SeriesType) => void;
@@ -1086,6 +1136,20 @@ function YAxisSideToggle({ value, onChange }: YAxisSideToggleProps) {
 			<TooltipContent side='top'>{isRight ? 'Right Y-axis' : 'Left Y-axis'}</TooltipContent>
 		</Tooltip>
 	);
+}
+
+/** Slice categories in the order the pie draws them, including the bucketed "Other" slice. */
+function listPieCategories(
+	data: Record<string, unknown>[] | undefined,
+	xAxisKey: string | undefined,
+	valueKey: string | undefined,
+): string[] {
+	if (!data || data.length === 0 || !xAxisKey || !valueKey) {
+		return [];
+	}
+	const categoryKey = resolveDataKey(data, xAxisKey);
+	const rows = bucketPieData(data, categoryKey, resolveDataKey(data, valueKey));
+	return [...new Set(rows.map((row) => String(row[categoryKey])))];
 }
 
 function getSelectableColumns(columns: string[]): string[] {

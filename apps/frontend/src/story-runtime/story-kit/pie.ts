@@ -1,4 +1,4 @@
-import { bucketPieData, labelize } from '@nao/shared/chart-builder';
+import { bucketPieData, labelize, pieSliceColor } from '@nao/shared/chart-builder';
 import { seriesColorAt } from '@nao/shared/chart-series';
 import type { ChartConfig } from '@nao/shared/chart-tooltip';
 import type { displayChart } from '@nao/shared/tools';
@@ -14,7 +14,9 @@ export interface PiePresentation {
 export function piePresentation(rows: Row[], categoryKey: string, value: displayChart.SeriesConfig): PiePresentation {
 	const bucketed = bucketPieData(rows, categoryKey, value.data_key);
 	const categories = bucketed.map((row) => String(row[categoryKey]));
-	const colors = new Map(categories.map((category, index) => [category, seriesColorAt(index)]));
+	const colors = new Map(
+		categories.map((category, index) => [category, pieSliceColor(value, category, seriesColorAt(index))]),
+	);
 	const config: ChartConfig = {
 		[categoryKey]: { label: labelize(categoryKey) },
 		[value.data_key]: { label: value.label ?? labelize(value.data_key), valueFormat: value.value_format },

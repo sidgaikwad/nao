@@ -1,4 +1,12 @@
-import { bucketPieData, buildChart, buildStoryChartBlock, labelize, resolveDataKey, useChartStyle } from '@nao/shared';
+import {
+	bucketPieData,
+	buildChart,
+	buildStoryChartBlock,
+	labelize,
+	pieSliceColor,
+	resolveDataKey,
+	useChartStyle,
+} from '@nao/shared';
 import {
 	buildSeriesChartConfig,
 	buildSeriesLegendPayload,
@@ -539,7 +547,7 @@ export const ChartDisplay = memo(function ChartDisplay({
 					const category = String(item[xAxisKey]);
 					acc[toKey(category)] = {
 						label: labelize(category, dateFormat),
-						color: seriesColorAt(index),
+						color: pieSliceColor(series[0], category, seriesColorAt(index)),
 					};
 					return acc;
 				},
@@ -572,7 +580,7 @@ export const ChartDisplay = memo(function ChartDisplay({
 				return {
 					value: category,
 					dataKey: toKey(category),
-					color: seriesColorAt(index),
+					color: pieSliceColor(series[0], category, seriesColorAt(index)),
 					isHidden: false,
 				};
 			});
