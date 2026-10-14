@@ -274,6 +274,7 @@ const aggregateChatMessagParts = (
 					citation: row.chat_message.citation ?? undefined,
 					stopReason: row.chat_message.stopReason ?? undefined,
 					llmProvider: row.chat_message.llmProvider ?? undefined,
+					llmModelId: row.chat_message.llmModelId ?? undefined,
 					createdAt: row.chat_message.createdAt?.getTime(),
 				};
 			}
