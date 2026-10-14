@@ -8,12 +8,14 @@ import {
 	StoryChartEmbed as LiveChartEmbed,
 	StoryMapEmbed as LiveMapEmbed,
 	StoryTableEmbed as LiveTableEmbed,
+	EmbedLoading,
 } from '@/components/story-embeds';
 import { StoryFilterBar } from '@/components/story-filter-bar';
 import { SegmentList } from '@/components/story-rendering';
 import { StoryQuerySqlProvider } from '@/contexts/story-query-sql';
 import { useStoryFilters } from '@/hooks/use-story-filters';
 import { stabilizeStorySegments } from '@/lib/story-segment-stability';
+import { splitStreamingStoryCode } from '@/lib/story-streaming';
 import { trpc } from '@/main';
 
 interface StoryPreviewProps {
@@ -44,11 +46,15 @@ export const StoryPreview = memo(function StoryPreview({
 	isViewingLatest = true,
 }: StoryPreviewProps) {
 	const previousSegmentsRef = useRef<ReturnType<typeof splitCodeIntoSegments>>([]);
+	const { visibleCode, hasPendingBlock } = useMemo(
+		() => (isStreaming ? splitStreamingStoryCode(code) : { visibleCode: code, hasPendingBlock: false }),
+		[code, isStreaming],
+	);
 	const segments = useMemo(() => {
-		const nextSegments = stabilizeStorySegments(splitCodeIntoSegments(code), previousSegmentsRef.current);
+		const nextSegments = stabilizeStorySegments(splitCodeIntoSegments(visibleCode), previousSegmentsRef.current);
 		previousSegmentsRef.current = nextSegments;
 		return nextSegments;
-	}, [code]);
+	}, [visibleCode]);
 	const isNoCacheMode = cacheSchedule === NO_CACHE_SCHEDULE;
 	const filterApi = useMemo(() => ({ kind: 'owned' as const, chatId, storySlug }), [chatId, storySlug]);
 	const storyFilters = useStoryFilters({
@@ -166,6 +172,7 @@ export const StoryPreview = memo(function StoryPreview({
 					renderTable={renderTable}
 					renderMap={renderMap}
 				/>
+				{hasPendingBlock && <EmbedLoading label='Loading...' />}
 			</div>
 		</StoryQuerySqlProvider>
 	);
