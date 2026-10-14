@@ -360,6 +360,19 @@ class TestCloneOrPullRepo:
 
     @patch("nao_core.commands.sync.providers.repositories.provider.subprocess.run")
     @patch("nao_core.commands.sync.providers.repositories.provider.console")
+    def test_rejects_repo_name_resolving_to_base_path(self, mock_console, mock_run, tmp_path: Path):
+        """Security: repo.name '.' would make the atomic swap wipe the whole repos folder."""
+        (tmp_path / "other-repo").mkdir()
+        repo = RepoConfig(name=".", url="https://github.com/test/evil")
+
+        result = clone_or_pull_repo(repo, tmp_path)
+
+        assert result is False
+        mock_run.assert_not_called()
+        assert (tmp_path / "other-repo").exists()
+
+    @patch("nao_core.commands.sync.providers.repositories.provider.subprocess.run")
+    @patch("nao_core.commands.sync.providers.repositories.provider.console")
     def test_returns_false_on_clone_failure(self, mock_console, mock_run, tmp_path: Path):
         repo = RepoConfig(name="new-repo", url="https://github.com/test/new-repo")
         mock_run.return_value = MagicMock(returncode=1, stderr="Error cloning")
@@ -584,6 +597,25 @@ class TestSyncLocalRepo:
         result = sync_local_repo(repo, output)
 
         assert result is False
+
+    @pytest.mark.parametrize("repo_name", ["../docs", ".", "{tmp_path}/docs"])
+    def test_rejects_repo_name_outside_output(self, tmp_path: Path, repo_name: str):
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "file.txt").write_text("hello")
+        output = tmp_path / "repos"
+        output.mkdir()
+        (output / "other-repo").mkdir()
+        docs = tmp_path / "docs"
+        docs.mkdir()
+        (docs / "keep.md").write_text("keep me")
+
+        repo = RepoConfig(name=repo_name.format(tmp_path=tmp_path), local_path=str(source))
+        result = sync_local_repo(repo, output)
+
+        assert result is False
+        assert (docs / "keep.md").read_text() == "keep me"
+        assert (output / "other-repo").exists()
 
 
 class TestSyncRepo:

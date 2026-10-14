@@ -26,8 +26,7 @@ def clone_or_pull_repo(repo: RepoConfig, base_path: Path) -> bool:
     tmp_path = base_path / f"{repo.name}.tmp"
 
     try:
-        # Guard against path traversal via malicious repo.name (e.g. "../other")
-        if not repo_path.resolve().is_relative_to(base_path.resolve()):
+        if not _is_inside_base_path(repo_path, base_path):
             UI.print(f"  [yellow]⚠[/yellow] Invalid repo path: {escape(repo.name)}")
             return False
 
@@ -73,6 +72,13 @@ def clone_or_pull_repo(repo: RepoConfig, base_path: Path) -> bool:
         UI.print(f"  [yellow]⚠[/yellow] Error syncing {escape(repo.name)}: {e}")
         shutil.rmtree(tmp_path, ignore_errors=True)
         return False
+
+
+def _is_inside_base_path(repo_path: Path, base_path: Path) -> bool:
+    """Guard against path traversal via repo.name (e.g. "../other", "/abs", ".")."""
+    resolved_base = base_path.resolve()
+    resolved_repo = repo_path.resolve()
+    return resolved_repo != resolved_base and resolved_repo.is_relative_to(resolved_base)
 
 
 def _glob_to_regex(pattern: str) -> re.Pattern[str]:
@@ -171,6 +177,10 @@ def sync_local_repo(repo: RepoConfig, base_path: Path) -> bool:
     repo_path = base_path / repo.name
 
     try:
+        if not _is_inside_base_path(repo_path, base_path):
+            UI.print(f"  [yellow]⚠[/yellow] Invalid repo path: {escape(repo.name)}")
+            return False
+
         if not source_path.exists():
             UI.print(f"  [yellow]⚠[/yellow] Local path does not exist: {source_path}")
             return False
