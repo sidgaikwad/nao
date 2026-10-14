@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { LlmProviderIcon } from '@/components/ui/llm-provider-icon';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePermissions } from '@/hooks/use-permissions';
-import { isSameModel, useModelSelection } from '@/hooks/use-model-selection';
+import { useModelSelection } from '@/hooks/use-model-selection';
+import { isSameModel } from '@/lib/chat-model';
 import { getShortcutLabel } from '@/lib/keyboard-shortcuts';
 
 /** Listed as an option rather than a link, so that the keyboard reaches it like any other. */

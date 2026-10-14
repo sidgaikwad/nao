@@ -29,6 +29,7 @@ import {
 	parseBudgetError,
 	resolveImagesFromMessage,
 } from '@/lib/ai';
+import { findChatModel } from '@/lib/chat-model';
 import { createLocalStorage } from '@/lib/local-storage';
 import { trpc } from '@/main';
 import { useChatQuery, useSetChat } from '@/queries/use-chat-query';
@@ -55,11 +56,14 @@ export interface AgentHelpers {
 	cancelAgent: () => Promise<void>;
 	error: Error | undefined;
 	clearError: UseChatHelpers<UIMessage>['clearError'];
-	/** The model the next message will run on: the user's pick, or the admin default when none is pinned. */
+	/**
+	 * The model the next message will run on: the model the open chat last ran on, the user's pick,
+	 * or the admin default when none is pinned.
+	 */
 	selectedModel: LlmSelectedModel | null;
 	usesDefaultModel: boolean;
 	/** Pass `null` to follow the admin default. */
-	setSelectedModel: React.Dispatch<React.SetStateAction<LlmSelectedModel | null>>;
+	setSelectedModel: (model: LlmSelectedModel | null) => void;
 	setMentions: (mentions: MentionOption[]) => void;
 	adminMode: boolean;
 	setAdminMode: (enabled: boolean) => void;
@@ -91,23 +95,36 @@ interface AgentSendRefs {
 }
 const agentSendRefsStore = new WeakMap<Agent<UIMessage>, AgentSendRefs>();
 
+interface ChatModelPick {
+	chatId: string;
+	model: LlmSelectedModel | null;
+}
+
 export const useAgent = ({ disableNavigation = false }: { disableNavigation?: boolean } = {}): AgentState => {
 	const navigate = useNavigate();
 	const chatId = useChatId();
 	const chat = useChatQuery({ chatId });
 
 	// A null pick means "nao default": no model is sent and the server resolves the admin default.
-	const [pinnedModel, setSelectedModel] = useLocalStorage(selectedModelStorage);
+	const [pinnedModel, setPinnedModel] = useLocalStorage(selectedModelStorage);
+	const [chatModelPick, setChatModelPick] = useState<ChatModelPick>();
 	const defaultChatModel = useQuery(trpc.project.getDefaultChatModel.queryOptions());
-	const usesDefaultModel = pinnedModel === null;
-	const selectedModel = pinnedModel ?? defaultChatModel.data ?? null;
+	const availableModels = useQuery(trpc.project.listAvailableTranscribeModels.queryOptions());
+	const chatModel = useMemo(
+		() => findChatModel(chat.data?.messages, availableModels.data),
+		[chat.data?.messages, availableModels.data],
+	);
+	const pickedChatModel = chatModelPick && chatModelPick.chatId === chatId ? chatModelPick : undefined;
+	const activeModel = pickedChatModel ? pickedChatModel.model : (chatModel ?? pinnedModel);
+	const usesDefaultModel = activeModel === null;
+	const selectedModel = activeModel ?? defaultChatModel.data ?? null;
 	const setChat = useSetChat();
 	const queryClient = useQueryClient();
 
 	const chatIdRef = useRef(chatId);
 	chatIdRef.current = chatId;
 	const selectedModelRef = useRef<LlmSelectedModel | null>(null);
-	selectedModelRef.current = pinnedModel;
+	selectedModelRef.current = activeModel;
 	const mentionsRef = useRef<MentionOption[]>([]);
 	const [adminMode, setAdminModeState] = useState(false);
 	const adminModeRef = useRef(false);
@@ -117,6 +134,16 @@ export const useAgent = ({ disableNavigation = false }: { disableNavigation?: bo
 	const setMentions = useCallback((mentions: MentionOption[]) => {
 		mentionsRef.current = mentions;
 	}, []);
+
+	const setSelectedModel = useCallback(
+		(model: LlmSelectedModel | null) => {
+			setPinnedModel(model);
+			if (chatId) {
+				setChatModelPick({ chatId, model });
+			}
+		},
+		[chatId, setPinnedModel],
+	);
 
 	const setAdminMode = useCallback((enabled: boolean) => {
 		adminModeRef.current = enabled;

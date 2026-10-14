@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
-import type { LlmSelectedModel } from '@nao/shared/types';
 import { useAgentContext } from '@/contexts/agent.provider';
+import { isSameModel } from '@/lib/chat-model';
 import { trpc } from '@/main';
 
 export function useModelSelection() {
@@ -38,8 +38,4 @@ export function useModelSelection() {
 		canCycleModels,
 		cycleModel,
 	};
-}
-
-export function isSameModel(model: LlmSelectedModel, other: LlmSelectedModel | null): boolean {
-	return !!other && model.provider === other.provider && model.modelId === other.modelId;
 }
