@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from ibis import BaseBackend
 
 from .base import DatabaseConfig
+from .mssql import MssqlDatabaseContext
 
 # Internal schemas created by SQL Server / Fabric — never user data.
 FABRIC_SYSTEM_SCHEMAS = frozenset(
@@ -261,6 +262,9 @@ class FabricConfig(DatabaseConfig):
             schemas = list_databases()
             return [s for s in schemas if s not in FABRIC_SYSTEM_SCHEMAS]
         return []
+
+    def create_context(self, conn: BaseBackend, schema: str, table_name: str) -> MssqlDatabaseContext:
+        return MssqlDatabaseContext(conn, schema, table_name)
 
     def check_connection(self) -> tuple[bool, str]:
         """Test connectivity to Microsoft Fabric."""

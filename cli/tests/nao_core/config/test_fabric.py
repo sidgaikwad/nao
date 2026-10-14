@@ -1,4 +1,5 @@
 import struct
+from unittest.mock import MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -10,6 +11,7 @@ from nao_core.config.databases.fabric import (
     _encode_access_token,
     _odbc_escape,
 )
+from nao_core.config.databases.mssql import MssqlDatabaseContext
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -357,6 +359,18 @@ def test_get_database_name():
 
 def test_default_port_is_1433():
     assert _sql_config().port == 1433
+
+
+def test_create_context_uses_tsql_dialect():
+    context = _sql_config().create_context(MagicMock(), "dbo", "sales")
+
+    profiling_sql = context._build_profiling_query({"name": "amount", "type": "float64"})
+    top_values_sql = context._build_top_values_query({"name": "status", "type": "string"})
+
+    assert isinstance(context, MssqlDatabaseContext)
+    assert "STDEVP(CAST([amount] AS FLOAT))" in profiling_sql
+    assert "SELECT TOP 10" in top_values_sql
+    assert "LIMIT" not in top_values_sql
 
 
 # ---------------------------------------------------------------------------
