@@ -1,7 +1,10 @@
-import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
+import { execFile } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
+import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { promisify } from 'node:util';
 
 import yaml from 'js-yaml';
 
@@ -10,6 +13,10 @@ import { env } from '../env';
 import { ensureContextRecommendationsScheduleForNewProject } from '../handlers/context-recommendations.handler';
 import * as projectQueries from '../queries/project.queries';
 import { validateApiKey } from '../services/api-key.service';
+import { replaceProjectDirectory } from '../utils/project-import.utils';
+
+const execFileAsync = promisify(execFile);
+const TAR_TIMEOUT_MS = 30_000;
 
 export const deployRoutes = async (app: App) => {
 	app.post('/deploy', async (request, reply) => {
@@ -28,33 +35,28 @@ export const deployRoutes = async (app: App) => {
 			return reply.status(400).send({ error: 'No file uploaded. Send a tar.gz as multipart field "context".' });
 		}
 
-		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nao-deploy-'));
+		const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'nao-deploy-'));
 		const tarPath = path.join(tmpDir, 'context.tar.gz');
 
 		try {
-			const chunks: Buffer[] = [];
-			for await (const chunk of file.file) {
-				chunks.push(chunk);
-			}
-			fs.writeFileSync(tarPath, Buffer.concat(chunks));
+			await pipeline(file.file, createWriteStream(tarPath));
 
 			const extractDir = path.join(tmpDir, 'extracted');
-			fs.mkdirSync(extractDir, { recursive: true });
-			execFileSync('tar', ['xzf', tarPath, '-C', extractDir], { timeout: 30_000 });
+			await mkdir(extractDir, { recursive: true });
+			await execFileAsync('tar', ['xzf', tarPath, '-C', extractDir], { timeout: TAR_TIMEOUT_MS });
 
-			const unsupportedEntry = findUnsupportedEntry(extractDir);
+			const unsupportedEntry = await findUnsupportedEntry(extractDir);
 			if (unsupportedEntry) {
 				return reply.status(400).send({
 					error: `Archive entry "${unsupportedEntry}" is not a regular file or directory. Symlinks and special files are not allowed.`,
 				});
 			}
 
-			const configPath = path.join(extractDir, 'nao_config.yaml');
-			if (!fs.existsSync(configPath)) {
+			const configContent = await readConfigFile(extractDir);
+			if (configContent === null) {
 				return reply.status(400).send({ error: 'nao_config.yaml not found in uploaded archive' });
 			}
 
-			const configContent = fs.readFileSync(configPath, 'utf-8');
 			const config = yaml.load(configContent) as { project_name?: string };
 			const projectName = config?.project_name;
 			if (!projectName) {
@@ -62,49 +64,37 @@ export const deployRoutes = async (app: App) => {
 			}
 
 			const existing = await projectQueries.getProjectByOrgAndName(org.id, projectName);
-			let projectId: string;
-			let status: 'created' | 'updated';
-
 			if (existing) {
-				projectId = existing.id;
-				status = 'updated';
-
-				if (existing.path && fs.existsSync(existing.path)) {
-					fs.rmSync(existing.path, { recursive: true, force: true });
+				if (!existing.path) {
+					return reply.status(400).send({ error: `Project "${projectName}" has no path configured` });
 				}
-				fs.mkdirSync(existing.path!, { recursive: true });
-				copyDirectoryContents(extractDir, existing.path!);
-				await projectQueries.touchProjectUpdatedAt(projectId);
-			} else {
-				const projectId_ = crypto.randomUUID();
-				const projectDir = path.resolve(env.NAO_PROJECTS_DIR, projectId_);
-				fs.mkdirSync(projectDir, { recursive: true });
-				copyDirectoryContents(extractDir, projectDir);
-
-				const project = await projectQueries.createProject({
-					name: projectName,
-					type: 'local',
-					path: projectDir,
-					orgId: org.id,
-				});
-				projectId = project.id;
-				status = 'created';
-
-				await ensureContextRecommendationsScheduleForNewProject(projectId);
+				await replaceProjectDirectory(extractDir, existing.path);
+				await projectQueries.touchProjectUpdatedAt(existing.id);
+				return reply.send({ projectId: existing.id, projectName, status: 'updated' });
 			}
 
-			return reply.send({ projectId, projectName, status });
+			const projectDir = path.resolve(env.NAO_PROJECTS_DIR, crypto.randomUUID());
+			await replaceProjectDirectory(extractDir, projectDir);
+			const project = await projectQueries.createProject({
+				name: projectName,
+				type: 'local',
+				path: projectDir,
+				orgId: org.id,
+			});
+			await ensureContextRecommendationsScheduleForNewProject(project.id);
+
+			return reply.send({ projectId: project.id, projectName, status: 'created' });
 		} finally {
-			fs.rmSync(tmpDir, { recursive: true, force: true });
+			await rm(tmpDir, { recursive: true, force: true });
 		}
 	});
 };
 
-function findUnsupportedEntry(root: string, relativeDir = ''): string | null {
-	for (const entry of fs.readdirSync(path.join(root, relativeDir), { withFileTypes: true })) {
+async function findUnsupportedEntry(root: string, relativeDir = ''): Promise<string | null> {
+	for (const entry of await readdir(path.join(root, relativeDir), { withFileTypes: true })) {
 		const relativePath = path.join(relativeDir, entry.name);
 		if (entry.isDirectory()) {
-			const nested = findUnsupportedEntry(root, relativePath);
+			const nested = await findUnsupportedEntry(root, relativePath);
 			if (nested) {
 				return nested;
 			}
@@ -115,17 +105,13 @@ function findUnsupportedEntry(root: string, relativeDir = ''): string | null {
 	return null;
 }
 
-function copyDirectoryContents(src: string, dest: string): void {
-	for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-		const srcPath = path.join(src, entry.name);
-		const destPath = path.join(dest, entry.name);
-		if (entry.isDirectory()) {
-			fs.mkdirSync(destPath, { recursive: true });
-			copyDirectoryContents(srcPath, destPath);
-		} else if (entry.isFile()) {
-			fs.copyFileSync(srcPath, destPath);
-		} else {
-			throw new Error(`Refusing to copy non-regular file: ${srcPath}`);
+async function readConfigFile(projectDir: string): Promise<string | null> {
+	try {
+		return await readFile(path.join(projectDir, 'nao_config.yaml'), 'utf-8');
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+			return null;
 		}
+		throw error;
 	}
 }
