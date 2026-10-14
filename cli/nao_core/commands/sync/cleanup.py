@@ -31,6 +31,9 @@ class DatabaseSyncState:
     synced_columns: dict[str, dict[str, list[dict[str, Any]]]] = field(default_factory=dict)
     """Column metadata keyed by schema and table"""
 
+    failed_schemas: set[str] = field(default_factory=set)
+    """Set of schema names whose tables could not be listed, kept untouched on disk"""
+
     schemas_synced: int = 0
     """Count of schemas synced"""
 
@@ -60,6 +63,10 @@ class DatabaseSyncState:
         """
         self.synced_schemas.add(schema)
         self.schemas_synced += 1
+
+    def add_failed_schema(self, schema: str) -> None:
+        """Record that a schema could not be listed, so its existing context is preserved."""
+        self.failed_schemas.add(schema)
 
 
 def _sanitize_folder_part(value: str) -> str:
@@ -122,6 +129,9 @@ def cleanup_stale_paths(state: DatabaseSyncState, verbose: bool = False) -> int:
 
     # Remove schemas that weren't synced
     for schema_name, schema_path in existing_schemas.items():
+        if schema_name in state.failed_schemas:
+            continue
+
         if schema_name not in state.synced_schemas:
             if verbose:
                 console.print(f"  [dim red]removing stale schema:[/dim red] {schema_name}")

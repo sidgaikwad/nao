@@ -145,6 +145,22 @@ class TestCleanupStalePaths:
         assert removed == 3
         assert (schema_path / "table=users").exists()
 
+    def test_keeps_schema_directory_when_listing_failed(self, tmp_path: Path):
+        """Keeps schema directories whose tables could not be listed during sync."""
+        db_path = tmp_path / "type=duckdb" / "database=test"
+        (db_path / "schema=public" / "table=users").mkdir(parents=True)
+        (db_path / "schema=flaky" / "table=orders").mkdir(parents=True)
+
+        state = DatabaseSyncState(db_path=db_path)
+        state.add_schema("public")
+        state.add_table("public", "users")
+        state.add_failed_schema("flaky")
+
+        removed = cleanup_stale_paths(state)
+
+        assert removed == 0
+        assert (db_path / "schema=flaky" / "table=orders").exists()
+
     def test_ignores_non_schema_directories(self, tmp_path: Path):
         """Ignores directories that don't start with 'schema='."""
         # Create directory structure
