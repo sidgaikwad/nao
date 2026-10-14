@@ -1,4 +1,4 @@
-import { stripAssistantTags } from '@nao/shared';
+import { stripAssistantTags, toChartXAxisType } from '@nao/shared';
 import { isBuiltinChartType } from '@nao/shared/chart-types';
 import { Link } from '@tanstack/react-router';
 import {
@@ -781,7 +781,7 @@ function ChartSlideshow({ charts }: { charts: AutomationFeedChart[] }) {
 }
 
 function ChartSlide({ chart }: { chart: AutomationFeedChart }) {
-	const xAxisType = chart.config.x_axis_type === 'number' ? 'number' : 'category';
+	const xAxisType = toChartXAxisType(chart.config.x_axis_type);
 	const data = chart.data as Record<string, unknown>[];
 	if (!isBuiltinChartType(chart.config.chart_type)) {
 		return <div className='text-sm text-muted-foreground'>Custom charts are available in web chats only.</div>;

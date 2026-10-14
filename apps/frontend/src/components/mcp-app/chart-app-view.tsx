@@ -1,3 +1,4 @@
+import { toChartXAxisType } from '@nao/shared/chart-builder';
 import { isBuiltinChartType } from '@nao/shared/chart-types';
 import { memo, useMemo } from 'react';
 
@@ -34,7 +35,7 @@ export const ChartAppView = memo(function ChartAppView({ config, data, naoUrl }:
 		[config.series],
 	);
 
-	const xAxisType = config.xAxisType === 'number' ? 'number' : ('category' as const);
+	const xAxisType = toChartXAxisType(config.xAxisType);
 
 	let body: ReactNode;
 	if (!chartData.length) {

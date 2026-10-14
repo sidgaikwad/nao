@@ -1,4 +1,14 @@
-import { bucketPieData, buildChart, buildStoryChartBlock, labelize, resolveDataKey, useChartStyle } from '@nao/shared';
+import {
+	bucketPieData,
+	buildChart,
+	buildStoryChartBlock,
+	labelize,
+	resolveDataKey,
+	timestampToIsoDate,
+	toChartXAxisType,
+	useChartStyle,
+	usesTimeXAxis,
+} from '@nao/shared';
 import {
 	buildSeriesChartConfig,
 	buildSeriesLegendPayload,
@@ -34,6 +44,7 @@ import { CustomChart } from './custom-chart';
 import { SqlQueryDisplay } from './sql-query-display';
 import { SqlResultDisplay } from './sql-result-display';
 import { ToolCallWrapper } from './tool-call-wrapper';
+import type { ChartXAxisType } from '@nao/shared/chart-builder';
 import type { ChartConfig } from '@nao/shared/chart-tooltip';
 import type { ChartType } from '@nao/shared/chart-types';
 import type { ToolCallComponentProps } from '.';
@@ -417,7 +428,7 @@ export const DisplayChartToolCall = ({ toolPart }: ToolCallComponentProps<'displ
 					chartType={chartConfig.chart_type}
 					xAxisKey={chartConfig.x_axis_key ?? ''}
 					series={chartConfig.series}
-					xAxisType={chartConfig.x_axis_type === 'number' ? 'number' : 'category'}
+					xAxisType={toChartXAxisType(chartConfig.x_axis_type)}
 					xAxisLabel={chartConfig.x_axis_label}
 					title={chartConfig.title}
 					yAxisMin={chartConfig.y_axis_min}
@@ -441,7 +452,7 @@ export interface ChartDisplayProps {
 	data: Record<string, unknown>[];
 	chartType: ChartType;
 	xAxisKey: string;
-	xAxisType: 'number' | 'category';
+	xAxisType: ChartXAxisType;
 	xAxisLabel?: string;
 	xAxisLabelFormatter?: (value: string) => string;
 	valueFormatter?: (value: number) => string;
@@ -590,7 +601,9 @@ export const ChartDisplay = memo(function ChartDisplay({
 	// Keep labels horizontal while they fit side by side (label width plus a small gap);
 	// only once they would actually collide do we shrink + rotate, and then discard.
 	const horizontalLabelPx = longestLabelLen * MAX_TICK_FONT * CHAR_WIDTH_RATIO + HORIZONTAL_LABEL_GAP;
-	const compactXAxis = !isPie && xAxisType === 'category' && xAxisWidth > 0 && perCategoryPx < horizontalLabelPx;
+	const isTimeXAxis = usesTimeXAxis({ data, chartType, xAxisKey, xAxisType });
+	const compactXAxis =
+		!isPie && !isTimeXAxis && xAxisType !== 'number' && xAxisWidth > 0 && perCategoryPx < horizontalLabelPx;
 
 	let xAxisTickFontSize: number | undefined;
 	let xAxisMaxLabelChars: number | undefined;
@@ -621,8 +634,8 @@ export const ChartDisplay = memo(function ChartDisplay({
 		() => (value: unknown, items: unknown) =>
 			isPie
 				? labelize(resolvePieTooltipLabel(items as { name?: unknown }[]), dateFormat)
-				: labelize(value as string, dateFormat),
-		[isPie, dateFormat],
+				: labelize(isTimeXAxis ? timestampToIsoDate(value) : value, dateFormat),
+		[isPie, isTimeXAxis, dateFormat],
 	);
 
 	const isDualAxis = isComboChart(chartType) && displayChart.hasRightAxisSeries(visibleSeries);

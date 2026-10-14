@@ -319,11 +319,41 @@ export function defaultColorFor(_key: string, index: number): string {
 	return DEFAULT_COLORS[index % DEFAULT_COLORS.length];
 }
 
+export type ChartXAxisType = 'number' | 'category' | 'date';
+
+export function toChartXAxisType(value: unknown): ChartXAxisType {
+	return value === 'number' || value === 'date' ? value : 'category';
+}
+
+const TIME_X_AXIS_CHART_TYPES = new Set<ChartType>(['line', 'area', 'stacked_area', 'stacked_area_100']);
+
+/**
+ * Date x-axes on line and area charts are drawn on a continuous time scale, so missing dates
+ * keep their width instead of being collapsed. Tooltip labels on such axes are timestamps.
+ */
+export function usesTimeXAxis({
+	data,
+	chartType,
+	xAxisKey,
+	xAxisType,
+}: Pick<BuildChartProps, 'data' | 'chartType' | 'xAxisKey' | 'xAxisType'>): boolean {
+	return (
+		xAxisType === 'date' &&
+		TIME_X_AXIS_CHART_TYPES.has(chartType) &&
+		data.length > 0 &&
+		data.every((row) => isIsoDateLike(row[xAxisKey]))
+	);
+}
+
+export function timestampToIsoDate(value: unknown): unknown {
+	return typeof value === 'number' && Number.isFinite(value) ? new Date(value).toISOString() : value;
+}
+
 export interface BuildChartProps {
 	data: Record<string, unknown>[];
 	chartType: ChartType;
 	xAxisKey: string;
-	xAxisType?: 'number' | 'category';
+	xAxisType?: ChartXAxisType;
 	series: displayChart.SeriesConfig[];
 	colorFor?: (key: string, index: number) => string;
 	labelFormatter?: (value: string) => string;
@@ -414,13 +444,17 @@ function buildResolved(props: BuildChartProps) {
 			: undefined;
 
 	const isPercent = isPercentStackedChartType(props.chartType);
+	const isTimeXAxis = usesTimeXAxis(props);
 	// A total series is meaningless in a 100% stack (it would be its own 100%), so drop it
 	// from both rendering and normalization to keep the drawn bars and tooltip shares in sync.
 	const series = isPercent ? percentStackSeries(props.series) : props.series;
-	const data = isPercent ? clampNegativeSeriesValues(props.data, series) : props.data;
+	const orderedData = isTimeXAxis ? sortByDateKey(props.data, props.xAxisKey) : props.data;
+	const data = isPercent ? clampNegativeSeriesValues(orderedData, series) : orderedData;
 
 	const resolved: ResolvedProps = {
 		...props,
+		xAxisType: props.xAxisType === 'date' ? 'category' : props.xAxisType,
+		isTimeXAxis,
 		series,
 		data,
 		colorFor,
@@ -468,8 +502,10 @@ export function clampNegativeSeriesValues(
 	});
 }
 
-type ResolvedProps = BuildChartProps &
+type ResolvedProps = Omit<BuildChartProps, 'xAxisType'> &
 	Required<Pick<BuildChartProps, 'colorFor' | 'labelFormatter' | 'backgroundColor' | 'chartStyle'>> & {
+		xAxisType?: 'number' | 'category';
+		isTimeXAxis: boolean;
 		xAxisInterval?: number;
 	};
 
@@ -610,6 +646,7 @@ function renderCategoryXAxis({
 	maxLabelChars,
 	labelFootroom = 0,
 	xAxisLabel,
+	timeTicks,
 }: {
 	xAxisKey: string;
 	xAxisType?: 'number' | 'category';
@@ -621,15 +658,18 @@ function renderCategoryXAxis({
 	maxLabelChars?: number;
 	labelFootroom?: number;
 	xAxisLabel?: string;
+	timeTicks?: number[];
 }) {
 	const tickFormatter = compact
 		? (value: string) => formatCategoryTick(value, labelFormatter, maxLabelChars)
 		: labelFormatter;
+	const keyProps = timeTicks
+		? timeXAxisKeyProps(xAxisKey, timeTicks, tickFormatter)
+		: { dataKey: xAxisKey, type: xAxisType, tickFormatter };
 
 	return (
 		<XAxis
-			dataKey={xAxisKey}
-			type={xAxisType}
+			{...keyProps}
 			domain={['dataMin', 'dataMax']}
 			tick={compact ? { ...AXIS_TICK, fontSize: tickFontSize ?? AXIS_TICK.fontSize } : AXIS_TICK}
 			tickLine
@@ -637,12 +677,25 @@ function renderCategoryXAxis({
 			axisLine={false}
 			minTickGap={12}
 			interval={compact ? (compactInterval ?? 0) : xAxisInterval}
-			tickFormatter={tickFormatter}
 			height={CATEGORY_XAXIS_HEIGHT + labelFootroom + (xAxisLabel ? X_AXIS_LABEL_HEIGHT : 0)}
 			label={xAxisLabelProps(xAxisLabel)}
 			{...(compact ? { angle: -35, textAnchor: 'end' as const } : {})}
 		/>
 	);
+}
+
+function timeXAxisKeyProps(xAxisKey: string, ticks: number[], tickFormatter: (value: string) => string) {
+	return {
+		dataKey: (row: Record<string, unknown>) => toDateTime(row[xAxisKey]),
+		type: 'number' as const,
+		ticks,
+		tickFormatter: (value: number) => tickFormatter(String(timestampToIsoDate(value))),
+	};
+}
+
+function collectTimeTicks(data: Record<string, unknown>[], xAxisKey: string): number[] {
+	const timestamps = data.map((row) => toDateTime(row[xAxisKey])).filter((time) => time != null);
+	return [...new Set(timestamps)];
 }
 
 function formatCategoryTick(value: string, labelFormatter: (value: string) => string, maxLabelChars?: number): string {
@@ -1177,6 +1230,7 @@ function buildAreaChart(props: ResolvedProps) {
 				maxLabelChars: xAxisMaxLabelChars,
 				labelFootroom,
 				xAxisLabel,
+				timeTicks: props.isTimeXAxis ? collectTimeTicks(data, xAxisKey) : undefined,
 			})}
 			{children}
 			{renderedSeries.map((s, i) => (

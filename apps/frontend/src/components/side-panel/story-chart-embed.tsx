@@ -1,4 +1,4 @@
-import { resolveDataKey } from '@nao/shared';
+import { resolveDataKey, toChartXAxisType } from '@nao/shared';
 import { Code, Pencil } from 'lucide-react';
 import { memo, useContext, useMemo, useState } from 'react';
 import { StoryBlockDragContext } from './story-editor-drag-context';
@@ -63,7 +63,7 @@ export const StoryChartEmbed = memo(function StoryChartEmbed({
 		);
 	}
 
-	const xAxisType = chart.xAxisType === 'number' ? 'number' : ('category' as const);
+	const xAxisType = toChartXAxisType(chart.xAxisType);
 	const isKpi = chart.chartType === 'kpi_card';
 	const kpiLeadingHandle = isKpi && dragHandlePlacement === 'leading' ? dragHandle : undefined;
 

@@ -1,3 +1,4 @@
+import { toChartXAxisType } from '@nao/shared/chart-builder';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -140,7 +141,7 @@ export const StoryChartEmbed = memo(function StoryChartEmbed({
 					data={displayData}
 					chartType={chart.chartType as ChartType}
 					xAxisKey={chart.xAxisKey}
-					xAxisType={chart.xAxisType === 'number' ? 'number' : 'category'}
+					xAxisType={toChartXAxisType(chart.xAxisType)}
 					xAxisLabel={chart.xAxisLabel}
 					series={chart.series}
 					title={chart.title}

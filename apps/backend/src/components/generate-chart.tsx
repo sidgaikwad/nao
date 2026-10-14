@@ -1,4 +1,12 @@
-import { bucketPieData, buildChart, defaultColorFor, labelize, resolveDataKey, sortByDateKey } from '@nao/shared';
+import {
+	bucketPieData,
+	buildChart,
+	defaultColorFor,
+	labelize,
+	resolveDataKey,
+	sortByDateKey,
+	toChartXAxisType,
+} from '@nao/shared';
 import { isBuiltinChartType } from '@nao/shared/chart-types';
 import type { DateFormatSettings } from '@nao/shared/date';
 import { displayChart } from '@nao/shared/tools';
@@ -93,7 +101,7 @@ export function renderChartToSvg(input: RenderChartInput): string {
 		data: chartData,
 		chartType,
 		xAxisKey,
-		xAxisType: config.x_axis_type === 'number' ? 'number' : 'category',
+		xAxisType: toChartXAxisType(config.x_axis_type),
 		xAxisLabel: config.x_axis_label,
 		series,
 		colorFor,

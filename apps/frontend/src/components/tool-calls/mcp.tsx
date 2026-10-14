@@ -1,3 +1,4 @@
+import { toChartXAxisType } from '@nao/shared/chart-builder';
 import { parseChartBlock } from '@nao/shared/story-segments';
 import { Streamdown } from 'streamdown';
 import { ChartDisplay } from './display-chart';
@@ -84,7 +85,7 @@ const McpChartOutput = ({ chartBlock }: { chartBlock: string }) => {
 					data={data}
 					chartType={chart.chartType as ChartType}
 					xAxisKey={chart.xAxisKey}
-					xAxisType={chart.xAxisType === 'number' ? 'number' : 'category'}
+					xAxisType={toChartXAxisType(chart.xAxisType)}
 					xAxisLabel={chart.xAxisLabel}
 					series={chart.series}
 					title={chart.title}
